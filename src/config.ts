@@ -1,6 +1,7 @@
 export interface App {
   id: string;
   origins?: string[];
+  disabled?: boolean;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -17,6 +18,7 @@ export function parseApps(raw: string): Map<string, App> {
       !key.trim() ||
       key !== key.trim() ||
       !isRecord(app) ||
+      (app.disabled !== undefined && typeof app.disabled !== "boolean") ||
       typeof app.id !== "string" ||
       !app.id.trim() ||
       new TextEncoder().encode(app.id).length > 96
@@ -44,10 +46,22 @@ export function parseApps(raw: string): Map<string, App> {
     if (apps.has(normalizedKey)) throw new Error("invalid_config");
     apps.set(normalizedKey, {
       id: app.id,
+      disabled: app.disabled === true,
       ...(origins === undefined ? {} : { origins: origins as string[] }),
     });
   }
   return apps;
+}
+
+export function protectionLimit(
+  raw: string | undefined,
+  fallback: number,
+): number {
+  const value = raw === undefined ? fallback : Number(raw);
+  if (!raw?.trim() && raw !== undefined) throw new Error("invalid_config");
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error("invalid_config");
+  return value;
 }
 
 export function bodyLimit(raw: string): number {

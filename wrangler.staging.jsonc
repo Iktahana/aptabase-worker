@@ -1,11 +1,12 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "aptabase-worker-staging",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "MAX_BODY_BYTES": "524288"
+    "MAX_BODY_BYTES": "524288",
+    "RATE_LIMIT_PER_SECOND": "20",
+    "MONTHLY_EVENT_LIMIT": "20000"
   },
   "analytics_engine_datasets": [
     {
@@ -16,5 +17,19 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "INGESTION_GUARD",
+        "class_name": "IngestionGuard"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-guard",
+      "new_sqlite_classes": ["IngestionGuard"]
+    }
+  ]
 }

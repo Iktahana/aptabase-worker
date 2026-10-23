@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add configurable IP request limits, monthly per-app quotas, and app disabling with Durable Object counters.
+- Let Workers Builds supply the Worker name so forks can choose their own name.
+
 - Move Worker deployment from GitHub Actions to Cloudflare Workers Builds. GitHub Actions now runs tests only; Cloudflare manages deployment credentials internally.
 - Configure `APPS` as a runtime secret in each Cloudflare Worker.
 
