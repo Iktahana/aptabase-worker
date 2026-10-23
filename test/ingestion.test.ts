@@ -569,11 +569,14 @@ describe("abuse protection", () => {
     expect(
       (
         await Promise.all(results.map((r) => r.json<{ error?: string }>()))
-      ).filter((b) => b.error === "monthly_quota_exceeded"),
+      ).filter(
+        (b) =>
+          b.error === "Owner account is locked. Events are not being recorded.",
+      ),
     ).toHaveLength(7);
     const exhausted = request();
     expect(await (await worker.fetch(exhausted, bindings)).json()).toEqual({
-      error: "monthly_quota_exceeded",
+      error: "Owner account is locked. Events are not being recorded.",
     });
     expect(exhausted.bodyUsed).toBe(false);
     await worker.fetch(
@@ -592,14 +595,16 @@ describe("abuse protection", () => {
       await (
         await worker.fetch(request([web, web], "/api/v0/events"), bindings)
       ).json(),
-    ).toEqual({ error: "monthly_quota_exceeded" });
+    ).toEqual({
+      error: "Owner account is locked. Events are not being recorded.",
+    });
     expect(writeDataPoint).toHaveBeenCalledTimes(1);
     writeDataPoint.mockImplementationOnce(() => {
       throw new Error("failed");
     });
     expect((await worker.fetch(request(), bindings)).status).toBe(503);
     expect(await (await worker.fetch(request(), bindings)).json()).toEqual({
-      error: "monthly_quota_exceeded",
+      error: "Owner account is locked. Events are not being recorded.",
     });
   });
 
@@ -610,7 +615,7 @@ describe("abuse protection", () => {
     for (const key of ["A-SH-WEB", "A-SH-ROTATED"]) {
       const req = request(web, undefined, { "App-Key": key });
       expect(await (await worker.fetch(req, bindings)).json()).toEqual({
-        error: "app_disabled",
+        error: "Owner account is locked. Events are not being recorded.",
       });
       expect(req.bodyUsed).toBe(false);
     }
@@ -678,5 +683,171 @@ describe("dashboard configuration", () => {
     );
     expect(response.status).toBe(200);
     expect(writeDataPoint).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("HTTP response contract", () => {
+  it.each([
+    [web, "/api/v0/event", 200, "application/json", "{}"],
+    [[web], "/api/v0/events", 200, "application/json", "{}"],
+    [[], "/api/v0/events", 200, "application/json", "{}"],
+    [[null], "/api/v0/events", 200, "application/json", "{}"],
+    [{}, "/api/v0/event", 400, "text/plain; charset=utf-8", "Invalid event."],
+    [
+      Array(26).fill(web),
+      "/api/v0/events",
+      400,
+      "text/plain; charset=utf-8",
+      "Too many events (26) in a single request. Maximum is 25.",
+    ],
+    [
+      [],
+      "/api/v0/event",
+      400,
+      "application/problem+json",
+      '{"type":"about:blank","title":"Invalid request body shape.","status":400}',
+    ],
+    [
+      web,
+      "/api/v0/events",
+      400,
+      "application/problem+json",
+      '{"type":"about:blank","title":"Invalid request body shape.","status":400}',
+    ],
+  ])(
+    "returns the wire contract for %s",
+    async (body, path, status, type, text) => {
+      const { bindings } = setup();
+      const result = await worker.fetch(request(body, String(path)), bindings);
+      expect(result.status).toBe(status);
+      expect(result.headers.get("Content-Type")).toBe(type);
+      expect(result.headers.get("Cache-Control")).toBe("no-store");
+      expect(result.headers.get("Access-Control-Allow-Origin")).toBe("*");
+      expect(await result.text()).toBe(text);
+    },
+  );
+
+  it("returns fixed problems for parser and media failures without echoing input", async () => {
+    const { bindings, writeDataPoint } = setup();
+    for (const [body, type, status, title] of [
+      ['{"private-payload":', "application/json", 400, "Invalid JSON body."],
+      [
+        "private-payload",
+        "text/plain",
+        415,
+        "Content-Type must be application/json.",
+      ],
+    ] as const) {
+      const result = await worker.fetch(
+        new Request("https://worker.test/api/v0/event", {
+          method: "POST",
+          headers: { "App-Key": "A-SH-WEB", "Content-Type": type },
+          body,
+        }),
+        bindings,
+      );
+      expect(result.status).toBe(status);
+      expect(result.headers.get("Content-Type")).toBe(
+        "application/problem+json",
+      );
+      expect(await result.json()).toEqual({
+        type: "about:blank",
+        title,
+        status,
+      });
+    }
+    expect(writeDataPoint).not.toHaveBeenCalled();
+  });
+
+  it("rejects keys and locked apps before media checks or body reads, without leaks", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { bindings, writeDataPoint } = setup();
+    bindings.APPS = JSON.stringify({
+      "A-SH-WEB": { id: crypto.randomUUID() },
+      DISABLED: { id: "disabled", disabled: true },
+    });
+    Reflect.set(bindings, "MONTHLY_EVENT_LIMIT", "1");
+    await worker.fetch(request(), bindings);
+    for (const [key, error] of [
+      ["", "Missing App-Key header. Events are not being recorded."],
+      [
+        "PRIVATE-UNKNOWN",
+        "Application not found with given app key. Events are not being recorded.",
+      ],
+      ["DISABLED", "Owner account is locked. Events are not being recorded."],
+      ["A-SH-WEB", "Owner account is locked. Events are not being recorded."],
+    ]) {
+      const req = request({ privatePayload: "secret" }, undefined, {
+        "App-Key": key ?? "",
+        "Content-Type": "text/plain",
+      });
+      const result = await worker.fetch(req, bindings);
+      expect(result.status).toBe(200);
+      expect(result.headers.get("Content-Type")).toBe("application/json");
+      expect(await result.json()).toEqual({ error });
+      expect(req.bodyUsed).toBe(false);
+    }
+    expect(writeDataPoint).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(
+      /PRIVATE-UNKNOWN|privatePayload|secret/,
+    );
+  });
+
+  it("returns an empty rate rejection and retains the Retry-After extension", async () => {
+    const { bindings } = setup();
+    Reflect.set(bindings, "RATE_LIMIT_PER_SECOND", "1");
+    const headers = { "CF-Connecting-IP": crypto.randomUUID() };
+    await worker.fetch(request(web, undefined, headers), bindings);
+    const result = await worker.fetch(
+      request(web, undefined, headers),
+      bindings,
+    );
+    expect(result.status).toBe(429);
+    expect(result.headers.get("Retry-After")).toBe("1");
+    expect(result.headers.has("Content-Type")).toBe(false);
+    expect(await result.text()).toBe("");
+  });
+});
+
+describe("platform failure response contracts", () => {
+  it("keeps fixed JSON errors and never leaks exception messages", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { bindings, writeDataPoint } = setup();
+    const cases: [Env, Request, number, string][] = [];
+    const small = { ...bindings };
+    Reflect.set(small, "MAX_BODY_BYTES", "1");
+    cases.push([small, request(), 413, "body_too_large"]);
+    const invalid = { ...bindings, APPS: "{}" };
+    cases.push([
+      invalid,
+      request(),
+      503,
+      "Configure a valid APPS variable in Cloudflare Settings > Runtime variables and secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps",
+    ]);
+    const unavailable = { ...bindings };
+    Reflect.deleteProperty(unavailable, "EVENTS");
+    cases.push([unavailable, request(), 503, "service_unavailable"]);
+    const storage = { ...bindings };
+    Reflect.set(storage, "MONTHLY_EVENT_LIMIT", "1");
+    Reflect.set(storage, "INGESTION_GUARD", {
+      getByName() {
+        throw new Error("private-exception");
+      },
+    });
+    cases.push([storage, request(), 503, "service_unavailable"]);
+    for (const [env, req, status, error] of cases) {
+      const result = await worker.fetch(req, env);
+      expect(result.status).toBe(status);
+      expect(result.headers.get("Content-Type")).toBe("application/json");
+      expect(await result.json()).toEqual({ error });
+    }
+    writeDataPoint.mockImplementation(() => {
+      throw new Error("private-exception");
+    });
+    const result = await worker.fetch(request(), bindings);
+    expect(result.status).toBe(503);
+    expect(result.headers.get("Content-Type")).toBe("application/json");
+    expect(await result.json()).toEqual({ error: "write_failed" });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private-exception");
   });
 });

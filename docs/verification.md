@@ -4,6 +4,10 @@
 
 Run `npm ci` followed by `npm run check` for the full local validation. GitHub Actions runs `npm test` only. Cloudflare Workers Builds runs the full check and deploys after it passes. Tests execute in Workers' workerd runtime and cover both pinned SDK fixtures, multi-app routing and rotation, fixed schema mapping, debug flags, partial batches, failure responses, streaming size limits, UTF-8 boundaries, CORS, and sensitive-data exclusion from application logs.
 
+## Interface compatibility release check
+
+For a response-only release, run the full local check, push the verified commit to main, and wait for both GitHub Actions and the Cloudflare Workers Builds check for that exact commit. Publishing runs only in CI. Verify production `/healthz` returns `200 {}`, then send one synthetic event with `systemProps.isDebug: true` using an existing configured app key. Check status 200, Content-Type application/json and exact body `{}`. This smoke check confirms HTTP submission only, not persistence or actual SDK execution. Do not exhaust production quotas or inject production storage faults to test rejection paths; workerd tests cover those contracts.
+
 ## First staging acceptance
 
 1. Configure Cloudflare Workers Builds for the `staging` branch as described in the README. Push to that branch and confirm GitHub Actions tests and the Cloudflare build and health check pass. Health checks cannot prove storage persistence.

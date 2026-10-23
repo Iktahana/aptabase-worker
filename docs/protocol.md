@@ -7,9 +7,31 @@
 - Both paths accept `OPTIONS` without an App-Key and return 204.
 - `GET /healthz`: `200 {}` when app configuration, body/protection limits, and binding shapes are valid; otherwise 503. It never writes.
 
-POST requires `Content-Type: application/json` (parameters such as charset are accepted). App lookup precedes body consumption. Missing or unknown keys return HTTP 200 with a fixed English `error` message ending in `Events are not being recorded.` Unknown keys are never reflected. This follows upstream's non-retry status convention. Keys are case insensitive.
+Compatibility is pinned to Aptabase receiver commit [`4cca4bb394819c3591c019f758ce09c2844e544e`](https://github.com/aptabase/aptabase/tree/4cca4bb394819c3591c019f758ce09c2844e544e/src/Features/Ingestion). This is event-interface compatibility with the data and security differences below, not a replacement for the full Aptabase product.
 
-Malformed JSON, invalid UTF-8, and invalid body shapes return 400; unsupported content types return 415; excessive request bodies return 413; disallowed Origins return 403; configuration or synchronous binding failures return 503. Unknown routes return 404 and unsupported methods return 405. Errors use `{ "error": "fixed_code_or_message" }`. Body reads count actual streamed bytes regardless of Content-Length. `MAX_BODY_BYTES` defaults to 524288 (512 KiB); it can be reduced to any positive integer, up to that hard ceiling, in every Wrangler environment.
+| Scenario                                           | Status | Content-Type              | Body                                                                                   |
+| -------------------------------------------------- | ------ | ------------------------- | -------------------------------------------------------------------------------------- |
+| Single/batch success, empty/all-invalid batch      | 200    | application/json          | `{}`                                                                                   |
+| Missing key                                        | 200    | application/json          | `{"error":"Missing App-Key header. Events are not being recorded."}`                   |
+| Unknown key                                        | 200    | application/json          | `{"error":"Application not found with given app key. Events are not being recorded."}` |
+| Disabled app or exhausted app quota                | 200    | application/json          | `{"error":"Owner account is locked. Events are not being recorded."}`                  |
+| Invalid single event, including oversized AE point | 400    | text/plain; charset=utf-8 | `Invalid event.`                                                                       |
+| More than 25 batch entries                         | 400    | text/plain; charset=utf-8 | `Too many events (N) in a single request. Maximum is 25.`                              |
+| Malformed JSON / invalid UTF-8                     | 400    | application/problem+json  | `{"type":"about:blank","title":"Invalid JSON body.","status":400}`                     |
+| Wrong endpoint body shape                          | 400    | application/problem+json  | Same problem shape, title `Invalid request body shape.`                                |
+| Unsupported Content-Type                           | 415    | application/problem+json  | Same problem shape, title `Content-Type must be application/json.`, status 415         |
+| IP rate limit                                      | 429    | absent                    | Empty body; `Retry-After: 1` extension                                                 |
+| Request too large                                  | 413    | application/json          | `{"error":"body_too_large"}`                                                           |
+| Origin denied                                      | 403    | application/json          | `{"error":"origin_denied"}`                                                            |
+| Invalid APPS                                       | 503    | application/json          | Fixed setup instructions linking to README                                             |
+| Configuration/counter failure                      | 503    | application/json          | `{"error":"service_unavailable"}`                                                      |
+| AE submission failure                              | 503    | application/json          | `{"error":"write_failed"}`                                                             |
+
+All responses carry `Cache-Control: no-store`. POST requires `Content-Type: application/json` (parameters such as charset are accepted). Keys are case insensitive. Processing order is configuration, IP limit, app lookup/disabled check, Origin policy, quota precheck, media/body validation, atomic quota reservation, write. Missing, unknown, disabled and already exhausted apps never consume the body. Unknown keys, payloads and exception messages are never reflected in responses or application logs. Unknown routes return 404 and unsupported methods return 405 with fixed error JSON.
+
+Body reads count actual streamed bytes regardless of Content-Length. `MAX_BODY_BYTES` defaults to 524288 (512 KiB); it can be reduced to any positive integer, up to that hard ceiling, in every Wrangler environment.
+
+The unknown-key text omits the upstream key interpolation. Single-event validation uses a fixed generic English message rather than upstream field-specific messages. Problem responses deliberately omit framework traces and submitted values. The lock message is upstream wording: this project's lock and monthly quota apply to an app ID, not an owner account. CORS remains open by default with configured Origin restrictions; OPTIONS returns 204. Platform limits and the Retry-After header are retained extensions.
 
 ## Event shape
 

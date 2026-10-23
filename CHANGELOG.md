@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pin event response compatibility to Aptabase 4cca4bb: lock/key messages, text validation errors, safe problem JSON, empty 429 responses, and quota prechecks before media validation. Preserve data rules and document SDK retry behavior.
+
 - Preserve dashboard runtime variables during deployment and supply optional limits from code defaults.
 
 - Add configurable IP request limits, monthly per-app quotas, and app disabling with Durable Object counters.

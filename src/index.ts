@@ -2,6 +2,7 @@ import { encode, write } from "./analytics";
 import { bodyLimit, parseApps, protectionLimit } from "./config";
 import { normalize } from "./event";
 import { ipGuardName } from "./guard";
+import { ingestionResponse } from "./response";
 
 export { IngestionGuard } from "./guard";
 
@@ -71,21 +72,7 @@ export default {
             reasons,
           }),
         );
-      return Response.json(
-        code
-          ? {
-              error:
-                code === "missing_key"
-                  ? "Missing App-Key header. Events are not being recorded."
-                  : code === "unknown_key"
-                    ? "Unknown App-Key. Events are not being recorded."
-                    : code === "apps_not_configured"
-                      ? "Configure a valid APPS variable in Cloudflare Settings > Runtime variables and secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps"
-                      : code,
-            }
-          : {},
-        { status, headers },
-      );
+      return ingestionResponse(status, code, headers, received);
     }
     if (ingestion && request.method === "OPTIONS") {
       headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -152,14 +139,6 @@ export default {
         return response(403, "origin_denied");
       if (origin) headers.set("Access-Control-Allow-Origin", origin);
     }
-    if (
-      request.headers
-        .get("Content-Type")
-        ?.split(";", 1)[0]
-        ?.trim()
-        .toLowerCase() !== "application/json"
-    )
-      return response(415, "unsupported_media_type");
     let quota: DurableObjectStub<import("./guard").IngestionGuard> | undefined;
     try {
       quota = monthlyLimit
@@ -170,6 +149,14 @@ export default {
     } catch {
       return response(503, "service_unavailable");
     }
+    if (
+      request.headers
+        .get("Content-Type")
+        ?.split(";", 1)[0]
+        ?.trim()
+        .toLowerCase() !== "application/json"
+    )
+      return response(415, "unsupported_media_type");
     let body: unknown;
     try {
       body = await readJson(request, limit);
@@ -182,10 +169,14 @@ export default {
     const batch = path === "/api/v0/events";
     if (
       batch
-        ? !Array.isArray(body) || body.length > 25
+        ? !Array.isArray(body)
         : !body || typeof body !== "object" || Array.isArray(body)
     )
       return response(400, "invalid_body");
+    if (batch && Array.isArray(body) && body.length > 25) {
+      received = body.length;
+      return response(400, "batch_too_large");
+    }
     const values: unknown[] = batch && Array.isArray(body) ? body : [body];
     received = values.length;
     const points: AnalyticsEngineDataPoint[] = [];
