@@ -1,0 +1,55 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "aptabase-worker-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "secrets": {
+    "required": ["APPS"]
+  },
+  "vars": {
+    "MAX_BODY_BYTES": "524288"
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "EVENTS",
+      "dataset": "aptabase_events_v1_dev"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "env": {
+    "staging": {
+      "name": "aptabase-worker-staging",
+      "vars": {
+        "MAX_BODY_BYTES": "524288"
+      },
+      "analytics_engine_datasets": [
+        {
+          "binding": "EVENTS",
+          "dataset": "aptabase_events_v1_staging"
+        }
+      ],
+      "secrets": {
+        "required": ["APPS"]
+      }
+    },
+    "production": {
+      "name": "aptabase-worker",
+      "vars": {
+        "MAX_BODY_BYTES": "524288"
+      },
+      "analytics_engine_datasets": [
+        {
+          "binding": "EVENTS",
+          "dataset": "aptabase_events_v1"
+        }
+      ],
+      "secrets": {
+        "required": ["APPS"]
+      }
+    }
+  }
+}

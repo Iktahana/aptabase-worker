@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-10-23T00:00:00.123Z",
+  "sessionId": "179271360012345678",
+  "eventName": "button_clicked",
+  "systemProps": {
+    "locale": "en-US",
+    "isDebug": true,
+    "appVersion": "1.0.0",
+    "sdkVersion": "aptabase-js@fixture"
+  },
+  "props": { "button": "signup", "count": 1, "enabled": true }
+}

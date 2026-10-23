@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2026-10-23T00:00:01Z",
+    "sessionId": "179271360198765432",
+    "eventName": "app_started",
+    "systemProps": {
+      "isDebug": false,
+      "locale": "en_US",
+      "osName": "iOS",
+      "osVersion": "18.0",
+      "appVersion": "1.0",
+      "appBuildNumber": "42",
+      "sdkVersion": "aptabase-swift@fixture",
+      "deviceModel": "iPhone"
+    }
+  }
+]

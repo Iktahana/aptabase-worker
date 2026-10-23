@@ -1,0 +1,16 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!!worker-configuration.d.ts",
+      "!!dist",
+      "!!node_modules",
+      "!!package-lock.json",
+      "!!.wrangler"
+    ]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "javascript": { "formatter": { "quoteStyle": "double" } }
+}

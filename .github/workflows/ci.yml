@@ -1,0 +1,75 @@
+name: Check and release
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
+      action:
+        description: Release operation
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+        required: true
+      version:
+        description: Exact Worker version UUID (required for rollback)
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Validate environment bundles
+        run: |
+          npx wrangler deploy --env staging --dry-run --outdir dist/staging
+          npx wrangler deploy --env production --dry-run --outdir dist/production
+  release:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment || 'production' }}
+    concurrency:
+      group: release-${{ inputs.environment || 'production' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Deploy or roll back
+        run: node scripts/release.mjs
+        env:
+          RELEASE_ENV: ${{ inputs.environment || 'production' }}
+          RELEASE_ACTION: ${{ inputs.action || 'deploy' }}
+          ROLLBACK_VERSION: ${{ inputs.version }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          APPS: ${{ secrets.APPS }}
+          WORKER_URL: ${{ vars.WORKER_URL }}
+      - name: Verify health
+        run: node scripts/health.mjs
+        env:
+          WORKER_URL: ${{ vars.WORKER_URL }}

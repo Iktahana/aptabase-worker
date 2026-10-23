@@ -1,0 +1,39 @@
+{
+  "name": "aptabase-worker",
+  "version": "1.0.0",
+  "description": "Aptabase-compatible event ingestion on Cloudflare Workers and Analytics Engine",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "build": "wrangler deploy --env=\"\" --dry-run --outdir dist",
+    "check": "npm run lint && npm run types -- --check && npm run typecheck && npm test && npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Iktahana/aptabase-worker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Iktahana/aptabase-worker/issues"
+  },
+  "homepage": "https://github.com/Iktahana/aptabase-worker#readme",
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.2",
+    "@cloudflare/vitest-plugin": "^1.4.7",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  }
+}
