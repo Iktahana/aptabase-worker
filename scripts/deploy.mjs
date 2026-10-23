@@ -9,11 +9,12 @@ if (!["staging", "production"].includes(target ?? "")) {
   throw new Error("Choose the staging or production deployment target.");
 }
 
-const result = spawnSync(
-  process.execPath,
-  ["node_modules/wrangler/bin/wrangler.js", "deploy", "--env", target],
-  { stdio: "inherit", env: process.env },
-);
+const args = ["node_modules/wrangler/bin/wrangler.js", "deploy"];
+if (target === "staging") args.push("--config", "wrangler.staging.jsonc");
+const result = spawnSync(process.execPath, args, {
+  stdio: "inherit",
+  env: process.env,
+});
 if (result.error || result.status !== 0) {
   throw new Error("Worker deployment failed.");
 }

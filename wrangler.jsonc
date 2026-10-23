@@ -1,55 +1,56 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "aptabase-worker-dev",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
-  "secrets": {
-    "required": ["APPS"]
-  },
   "vars": {
-    "MAX_BODY_BYTES": "524288"
+    "MAX_BODY_BYTES": "524288",
+    "RATE_LIMIT_PER_SECOND": "20",
+    "MONTHLY_EVENT_LIMIT": "20000"
   },
   "analytics_engine_datasets": [
     {
       "binding": "EVENTS",
-      "dataset": "aptabase_events_v1_dev"
+      "dataset": "aptabase_events_v1"
     }
   ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1
   },
-  "env": {
-    "staging": {
-      "name": "aptabase-worker-staging",
-      "vars": {
-        "MAX_BODY_BYTES": "524288"
-      },
-      "analytics_engine_datasets": [
-        {
-          "binding": "EVENTS",
-          "dataset": "aptabase_events_v1_staging"
-        }
-      ],
-      "secrets": {
-        "required": ["APPS"]
-      }
+  "previews": {
+    "vars": {
+      "MAX_BODY_BYTES": "524288",
+      "RATE_LIMIT_PER_SECOND": "20",
+      "MONTHLY_EVENT_LIMIT": "20000"
     },
-    "production": {
-      "name": "aptabase-worker",
-      "vars": {
-        "MAX_BODY_BYTES": "524288"
-      },
-      "analytics_engine_datasets": [
-        {
-          "binding": "EVENTS",
-          "dataset": "aptabase_events_v1"
-        }
-      ],
-      "secrets": {
-        "required": ["APPS"]
+    "analytics_engine_datasets": [
+      {
+        "binding": "EVENTS",
+        "dataset": "aptabase_events_v1_preview"
       }
+    ],
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "INGESTION_GUARD",
+          "class_name": "IngestionGuard"
+        }
+      ]
     }
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "INGESTION_GUARD",
+        "class_name": "IngestionGuard"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-guard",
+      "new_sqlite_classes": ["IngestionGuard"]
+    }
+  ]
 }

@@ -1,26 +1,20 @@
 # Aptabase Worker
 
-A lightweight event receiver for Aptabase SDKs, built with TypeScript and Cloudflare Workers. Multiple applications share one Analytics Engine dataset, with stable app IDs and rotatable keys. Runtime dependencies: one Worker and one Analytics Engine dataset. MIT licensed; deploy this repository, rather than publishing an npm package.
+A lightweight event receiver for Aptabase SDKs, built with TypeScript and Cloudflare Workers. Multiple applications share one Analytics Engine dataset, with stable app IDs and rotatable keys. Runtime dependencies: one Worker, one Analytics Engine dataset, and SQLite-backed Durable Objects for abuse protection. MIT licensed; deploy this repository, rather than publishing an npm package.
 
 This project implements the **event ingestion protocol only**. It does not implement the Aptabase dashboard, authentication, query APIs, billing, Cron jobs, or archives. Cloudflare Workers metrics describe Worker operation; they do not automatically create Aptabase business charts.
 
 ## Step-by-step deployment
 
-You will deploy one Worker that can receive events for several apps. Development, staging, and production use separate Analytics Engine datasets. The staging and production Worker names in `wrangler.jsonc` are `aptabase-worker-staging` and `aptabase-worker`; change them before deploying if those names are already taken in your Cloudflare account.
+The basic setup deploys one production Worker. It can receive events for multiple apps. Add staging later if you need a separate test endpoint.
 
-### 1. Fork the repository
+### 1. Fork the repository and prepare Cloudflare
 
-Select **Fork** in GitHub and create a fork under your account or organization. Keep the default branch named `main`. Use Node.js 24.22.1 or a later Node 24 security patch for local commands. No npm account or npm publishing access is needed. The fork is a deployable repository, not an npm package.
+Fork this repository in GitHub and keep the default branch named `main`. In Cloudflare, enable a `workers.dev` subdomain and connect your GitHub account to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
-### 2. Prepare Cloudflare
+### 2. Define your apps
 
-1. Sign in to Cloudflare and enable the Workers `workers.dev` subdomain for your account if you have not already.
-2. Make sure Workers Analytics Engine is available in the account. You do not need to create datasets by hand: Wrangler configures the bindings, and Cloudflare creates each dataset on its first write. See [Cloudflare's Analytics Engine setup](https://developers.cloudflare.com/analytics/analytics-engine/get-started/).
-3. Connect the GitHub repository using [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/). Cloudflare manages its deployment credential internally; you do not need to create, copy, or maintain a Cloudflare API token. The first GitHub connection requires authorizing Cloudflare's GitHub app.
-
-### 3. Choose app keys and IDs
-
-Create an `APPS` JSON value. Each key is an App-Key that you will put in an SDK; each `id` is a stable label used to distinguish apps in Analytics Engine. You can use an Aptabase-shaped self-hosted key such as `A-SH-WEBSITE`:
+Create an `APPS` JSON mapping. Each key is the App-Key used by an SDK; each `id` is the stable app label stored in Analytics Engine. For example:
 
 ```json
 {
@@ -29,49 +23,30 @@ Create an `APPS` JSON value. Each key is an App-Key that you will put in an SDK;
 }
 ```
 
-Use a separate key and ID for each app whose analytics you want to keep separate. To rotate a key, add the new key with the same ID, deploy, update the client, then remove the old key in a later deployment. Keys are visible in client apps, so treat them as routing identifiers, not passwords. See [Applications and origins](#applications-and-origins) for optional browser Origin restrictions.
+Use a different ID for each app you want to report separately. You can map multiple keys to one ID to rotate keys later.
 
-### 4. Configure staging and production in Cloudflare
+### 3. Connect and deploy
 
-Create a `staging` branch in the fork. In Cloudflare, connect the repository to two Workers Builds projects, one for staging and one for production. Use these settings in each project's **Settings → Builds**. Replace `YOUR-SUBDOMAIN` with your Cloudflare `workers.dev` subdomain:
+In **Workers & Pages → Create application → GitHub**, select your fork. Choose your Worker name and leave the Build, Deploy, and Preview commands unchanged. Workers Builds supplies the deployment name; the repository does not hardcode it. The base Wrangler configuration targets production, so the default `npx wrangler deploy` command uses the production dataset. Keep Preview builds enabled; preview branches use their own Analytics Engine dataset. Preview builds do not inherit production secrets; add `APPS` to **Previews Base** if you want preview URLs to accept events.
 
-| Setting                     | Staging                                                      | Production                                           |
-| --------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
-| Git repository              | Your fork                                                    | Your fork                                            |
-| Production branch           | `staging`                                                    | `main`                                               |
-| Build command               | `npm run check`                                              | `npm run check`                                      |
-| Deploy command              | `node scripts/deploy.mjs staging`                            | `node scripts/deploy.mjs production`                 |
-| Build variable `WORKER_URL` | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` |
-| Worker name / dataset       | `aptabase-worker-staging` / `aptabase_events_v1_staging`     | `aptabase-worker` / `aptabase_events_v1`             |
+Select **Deploy**. The default `npm run build` runs formatting checks, dependency audit, type checks, tests, and a Wrangler dry-run before deployment. After the first build, open the Worker’s **Settings → Variables & Secrets**, add a secret named `APPS`, and paste the JSON from step 2. The endpoint will work once this secret is set.
 
-The `check` command runs formatting, dependency security audit, type generation check, TypeScript, tests, and a Wrangler dry run. Cloudflare then runs the deploy command and checks `/healthz`. Cloudflare Workers Builds automatically creates and manages its own deployment API token; do not add a Cloudflare token to GitHub secrets. For each Worker, add the `APPS` runtime secret once under **Settings → Variables & Secrets**. Set the same mapping in both environments unless you intentionally want different accepted keys.
+### 4. Deploy and connect your SDK
 
-### 5. Deploy and verify staging
+Push to `main` and wait for the Cloudflare build to finish. Check `https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/healthz` returns `{}`. Then send a test event using a key from `APPS`:
 
-1. Push or merge the code to the `staging` branch. GitHub Actions runs the tests, and Cloudflare Workers Builds runs the build and staging deployment. Require the `Checks / check` status on pull requests into `staging` in GitHub branch protection.
-2. Wait for the Cloudflare build to deploy and pass its health check. The endpoint should return `{}` at `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/healthz`. Health confirms that the Worker can read its configuration and binding; it does not write a test event or prove Analytics Engine persistence.
-3. Send a sample event using the same host and one key in `APPS`:
+```sh
+curl https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/api/v0/event \
+  -H 'Content-Type: application/json' \
+  -H 'App-Key: A-SH-WEBSITE' \
+  --data '{"timestamp":"2026-10-23T12:00:00Z","sessionId":"manual-check-1","eventName":"first_event","props":{"enabled":true}}'
+```
 
-   ```sh
-   curl https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/api/v0/event \
-     -H 'Content-Type: application/json' \
-     -H 'App-Key: A-SH-WEBSITE' \
-     --data '{"timestamp":"2026-10-23T12:00:00Z","sessionId":"manual-check-1","eventName":"staging_check","systemProps":{"isDebug":true},"props":{"enabled":true}}'
-   ```
+The Worker should return `200 {}`. Set your SDK host to `https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev` and use the matching App-Key from `APPS`. See [SDK setup](#sdk-setup) for Web and Swift examples.
 
-   A valid event returns `200 {}`. Follow [staging verification](docs/verification.md) to test real Web and Swift SDKs and confirm the stored column mapping before directing production clients to the Worker.
+To add a staging Worker later, connect a second Worker with a name of your choice to a `staging` branch. For that Worker only, set the deploy command to `node scripts/deploy.mjs staging`, add the same `APPS` secret, and set the `WORKER_URL` build variable. It uses `wrangler.staging.jsonc` and writes to `aptabase_events_v1_staging`.
 
-### 6. Deploy production
-
-After staging verification, merge the reviewed `staging` branch into `main`. GitHub Actions runs the tests and Cloudflare Workers Builds builds and deploys production, then checks `/healthz`. If a health check fails, the Cloudflare build reports failure; it does not automatically roll back. Use Cloudflare's deployment history to roll back if needed.
-
-Every pull request runs tests but does not deploy. Protect `main` with the passing GitHub Actions check before merging.
-
-### 7. Connect your SDK
-
-Use the production base URL and the matching key from `APPS`. For setup examples, see [SDK setup](#sdk-setup). The host should contain only the scheme and hostname: do not add `/api/v0/event`, and do not add a trailing slash.
-
-Production publishing is handled by Cloudflare Workers Builds, while GitHub Actions only runs tests. The `APPS` value is a Worker runtime secret set in the Cloudflare dashboard; it is never committed or passed as a command-line value. Cloudflare manages the credential it uses to deploy, so no user-created API token is needed. The deployment script requires Cloudflare's Workers Builds environment marker.
+GitHub Actions runs tests on pull requests. Cloudflare Workers Builds handles validation and deployment on pushes to `main`.
 
 ## Applications and origins
 
@@ -89,6 +64,21 @@ Keys are case insensitive. Multiple keys may map to the same stable ID for rotat
 
 Omitting `origins` permits any Origin (`Access-Control-Allow-Origin: *`). A configured list permits only exact HTTP(S) origins on POST; an empty list rejects all browser origins. Requests without Origin (including native SDKs) are allowed. CORS never enables credentials and cannot prevent non-browser abuse. Preflight is keyless and open for both event paths; the actual POST enforces the selected application's policy.
 
+## Abuse protection
+
+Defaults match Aptabase’s ingestion rate and free monthly allowance:
+
+| Variable                | Default | Scope                                                                             |
+| ----------------------- | ------- | --------------------------------------------------------------------------------- |
+| `RATE_LIMIT_PER_SECOND` | `20`    | Requests per IP per fixed one-second window, across apps and both event endpoints |
+| `MONTHLY_EVENT_LIMIT`   | `20000` | Valid events per stable app ID per UTC calendar month                             |
+
+Set either variable to `0` to disable that protection. Change the values in `wrangler.jsonc` (`vars` and `previews.vars`); use `wrangler.staging.jsonc` for staging. Invalid settings return 503.
+
+Limits use Durable Objects, provisioned automatically on deployment. Preview counters are isolated from production. Missing client IPs share one rate bucket in local development. Rate rejection returns `429` with `Retry-After: 1`; exhausted quotas return `200 {"error":"monthly_quota_exceeded"}` to stop SDK retries. An exhausted app is rejected before its body is read. Batches exceeding the remaining quota are rejected as a whole. Only valid events reserve quota, before Analytics Engine submission; failed writes and duplicate retries can consume quota. Raising the limit resumes ingestion; month rollover resets it automatically. Unlike Aptabase’s account-wide allowance, this project gives each app its own allowance.
+
+To pause an app, add `"disabled": true` to its entry in `APPS`. This blocks every key mapped to that app ID before reading the body. Remove the flag to resume. Missing and unknown keys are also rejected before body parsing. Public SDK keys cannot prove that events came from real users; limits reduce abuse rather than eliminate it.
+
 ## SDK setup
 
 Web (`@aptabase/web`):
@@ -97,7 +87,7 @@ Web (`@aptabase/web`):
 import * as Aptabase from "@aptabase/web";
 
 Aptabase.init("A-SH-WEBSITE", {
-  host: "https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev",
+  host: "https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev",
 });
 Aptabase.trackEvent("button_clicked", { button: "signup", enabled: true });
 ```
@@ -108,7 +98,7 @@ Swift (`Aptabase`):
 import Aptabase
 
 Aptabase.shared.initialize(appKey: "A-SH-IOS", with: InitOptions(
-    host: "https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev"
+    host: "https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev"
 ))
 Aptabase.shared.trackEvent("app_started")
 ```

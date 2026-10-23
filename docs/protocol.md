@@ -5,7 +5,7 @@
 - `POST /api/v0/event`: one object; invalid events return 400.
 - `POST /api/v0/events`: an array of at most 25 entries; invalid entries are skipped, valid entries are written. Empty and entirely invalid batches return `200 {}` with no writes.
 - Both paths accept `OPTIONS` without an App-Key and return 204.
-- `GET /healthz`: `200 {}` when app configuration, body limit, and binding shape are valid; otherwise 503. It never writes.
+- `GET /healthz`: `200 {}` when app configuration, body/protection limits, and binding shapes are valid; otherwise 503. It never writes.
 
 POST requires `Content-Type: application/json` (parameters such as charset are accepted). App lookup precedes body consumption. Missing or unknown keys return HTTP 200 with a fixed English `error` message ending in `Events are not being recorded.` Unknown keys are never reflected. This follows upstream's non-retry status convention. Keys are case insensitive.
 
@@ -27,7 +27,7 @@ One event becomes one data point. The combined UTF-8 size of all encoded blobs m
 
 ## Frozen Analytics Engine columns
 
-Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`. Local development: `aptabase_events_v1_dev`.
+Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`. Worker Previews: `aptabase_events_v1_preview`. Local development uses the same dataset name as the base configuration, but Wrangler simulates the binding locally and does not write to the remote dataset.
 
 | Column    | Value                                     |
 | --------- | ----------------------------------------- |
@@ -56,3 +56,7 @@ Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`.
 Client and reception timestamps serve different purposes; select the appropriate one explicitly in future aggregations. Schema evolution only appends fields without changing existing meanings. Incompatible changes require a new dataset.
 
 Future daily archives should use UTC date partitions, repeatable jobs, and processing checkpoints. Recovering complete raw events from sampled AE results is impossible; full raw archives require an additional durable ingestion path. No archival or query endpoint is included in v1.
+
+## Abuse protection
+
+See [configuration and response behavior](../README.md#abuse-protection). Rate limits run before key lookup, so unknown keys also consume the IP request budget. Disabled apps and exhausted app quotas are rejected before body consumption. A second atomic quota reservation after validation prevents concurrent batches from exceeding the limit. Storage failures fail closed with 503; health checks validate binding shapes without writing counters. Quota reservations are conservative and are not rolled back after failed writes.

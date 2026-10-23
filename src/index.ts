@@ -1,6 +1,9 @@
 import { encode, write } from "./analytics";
-import { bodyLimit, parseApps } from "./config";
+import { bodyLimit, parseApps, protectionLimit } from "./config";
 import { normalize } from "./event";
+import { ipGuardName } from "./guard";
+
+export { IngestionGuard } from "./guard";
 
 class BodyError extends Error {
   constructor(
@@ -76,7 +79,9 @@ export default {
                   ? "Missing App-Key header. Events are not being recorded."
                   : code === "unknown_key"
                     ? "Unknown App-Key. Events are not being recorded."
-                    : code,
+                    : code === "apps_not_configured"
+                      ? "Configure a valid APPS secret in Cloudflare Settings > Variables & Secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps"
+                      : code,
             }
           : {},
         { status, headers },
@@ -95,19 +100,50 @@ export default {
     }
     let apps: ReturnType<typeof parseApps>;
     let limit: number;
+    let rateLimit: number;
+    let monthlyLimit: number;
     try {
       apps = parseApps(env.APPS);
+    } catch {
+      return response(503, "apps_not_configured");
+    }
+    try {
       limit = bodyLimit(env.MAX_BODY_BYTES);
+      rateLimit = protectionLimit(env.RATE_LIMIT_PER_SECOND, 20);
+      monthlyLimit = protectionLimit(env.MONTHLY_EVENT_LIMIT, 20000);
+      if (
+        (rateLimit || monthlyLimit) &&
+        typeof env.INGESTION_GUARD?.getByName !== "function"
+      )
+        throw new Error("binding_unavailable");
       if (typeof env.EVENTS?.writeDataPoint !== "function")
         throw new Error("binding_unavailable");
     } catch {
       return response(503, "service_unavailable");
     }
     if (!ingestion) return response(200);
+    try {
+      if (
+        rateLimit &&
+        !(await env.INGESTION_GUARD.getByName(
+          await ipGuardName(request),
+        ).request(rateLimit))
+      ) {
+        headers.set("Retry-After", "1");
+        return response(429, "rate_limited");
+      }
+    } catch {
+      return response(503, "service_unavailable");
+    }
     const key = request.headers.get("App-Key")?.trim().toUpperCase();
     if (!key) return response(200, "missing_key");
     const app = apps.get(key);
     if (!app) return response(200, "unknown_key");
+    if (
+      app.disabled ||
+      [...apps.values()].some((entry) => entry.id === app.id && entry.disabled)
+    )
+      return response(200, "app_disabled");
     const origin = request.headers.get("Origin");
     if (app.origins) {
       headers.delete("Access-Control-Allow-Origin");
@@ -124,6 +160,16 @@ export default {
         .toLowerCase() !== "application/json"
     )
       return response(415, "unsupported_media_type");
+    let quota: DurableObjectStub<import("./guard").IngestionGuard> | undefined;
+    try {
+      quota = monthlyLimit
+        ? env.INGESTION_GUARD.getByName(`app:${app.id}`)
+        : undefined;
+      if (quota && !(await quota.reserve(0, monthlyLimit)))
+        return response(200, "monthly_quota_exceeded");
+    } catch {
+      return response(503, "service_unavailable");
+    }
     let body: unknown;
     try {
       body = await readJson(request, limit);
@@ -165,6 +211,16 @@ export default {
       }
     }
     if (!batch && dropped) return response(400, "invalid_single_event");
+    try {
+      if (
+        points.length &&
+        quota &&
+        !(await quota.reserve(points.length, monthlyLimit))
+      )
+        return response(200, "monthly_quota_exceeded");
+    } catch {
+      return response(503, "service_unavailable");
+    }
     submitted = write(env.EVENTS, points);
     if (submitted !== points.length) return response(503, "write_failed");
     return response(200);
