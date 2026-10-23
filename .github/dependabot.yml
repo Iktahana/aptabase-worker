@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  # npm dependencies (production + devDependencies)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    # Opening PRs is the default behavior; this controls the details
+    open-pull-requests-limit: 10
+    # Bundle minor/patch updates into one PR to reduce noise
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    # Security updates take priority and bypass the group
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+    # Add dependencies to exclude here, e.g.:
+    # ignore:
+    #   - dependency-name: "wrangler"
+    #     versions: [">=4.0.0"]
