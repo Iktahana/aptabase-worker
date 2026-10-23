@@ -10,7 +10,7 @@ You will deploy one Worker that can receive events for several apps. Development
 
 ### 1. Fork the repository
 
-Select **Fork** in GitHub and create a fork under your account or organization. Keep the default branch named `main`. No npm account or npm publishing access is needed. The fork is a deployable repository, not an npm package.
+Select **Fork** in GitHub and create a fork under your account or organization. Keep the default branch named `main`. Use Node.js 24.22.1 or a later Node 24 security patch for local commands. No npm account or npm publishing access is needed. The fork is a deployable repository, not an npm package.
 
 ### 2. Prepare Cloudflare
 
@@ -36,18 +36,18 @@ Use a separate key and ID for each app whose analytics you want to keep separate
 
 In your fork, open **Settings → Environments**. Create two environments named exactly `staging` and `production`. In **each** environment, add these environment secrets:
 
-| Secret | Value |
-| --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare Account ID from step 2 |
-| `CLOUDFLARE_API_TOKEN` | The restricted account-scoped API token from step 2 |
-| `APPS` | The JSON app-key mapping from step 3 |
+| Secret                  | Value                                               |
+| ----------------------- | --------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare Account ID from step 2               |
+| `CLOUDFLARE_API_TOKEN`  | The restricted account-scoped API token from step 2 |
+| `APPS`                  | The JSON app-key mapping from step 3                |
 
 In each environment, add the environment **variable** `WORKER_URL` with the full HTTPS base URL for that Worker. Replace `YOUR-SUBDOMAIN` with your Cloudflare `workers.dev` subdomain:
 
-| Environment | URL | Dataset |
-| --- | --- | --- |
-| `staging` | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `aptabase_events_v1_staging` |
-| `production` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` | `aptabase_events_v1` |
+| Environment  | URL                                                          | Dataset                      |
+| ------------ | ------------------------------------------------------------ | ---------------------------- |
+| `staging`    | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `aptabase_events_v1_staging` |
+| `production` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev`         | `aptabase_events_v1`         |
 
 Keep both `APPS` values identical unless you intentionally want to accept different keys in staging and production. Optionally configure environment deployment protection for `production`; if you require an approval, GitHub will pause the automatic production release until that approval is granted. Do not require a production approval if you expect every `main` push to deploy without intervention.
 
