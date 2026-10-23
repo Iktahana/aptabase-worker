@@ -10,14 +10,13 @@ You will deploy one Worker that can receive events for several apps. Development
 
 ### 1. Fork the repository
 
-Select **Fork** in GitHub and create a fork under your account or organization. Keep the default branch named `main`. No npm account or npm publishing access is needed. The fork is a deployable repository, not an npm package.
+Select **Fork** in GitHub and create a fork under your account or organization. Keep the default branch named `main`. Use Node.js 24.22.1 or a later Node 24 security patch for local commands. No npm account or npm publishing access is needed. The fork is a deployable repository, not an npm package.
 
 ### 2. Prepare Cloudflare
 
 1. Sign in to Cloudflare and enable the Workers `workers.dev` subdomain for your account if you have not already.
 2. Make sure Workers Analytics Engine is available in the account. You do not need to create datasets by hand: Wrangler configures the bindings, and Cloudflare creates each dataset on its first write. See [Cloudflare's Analytics Engine setup](https://developers.cloudflare.com/analytics/analytics-engine/get-started/).
-3. Copy your Cloudflare **Account ID** from the account overview.
-4. Create an account-scoped API token for the Worker deployment workflow. Grant the Workers permissions required by Wrangler to deploy scripts and their configuration. Follow [Cloudflare's GitHub Actions instructions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/) and limit the token to this account and the required resources. This token stays in GitHub; do not put it in the repository, `.dev.vars`, or a command.
+3. Connect the GitHub repository using [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/). Cloudflare manages its deployment credential internally; you do not need to create, copy, or maintain a Cloudflare API token. The first GitHub connection requires authorizing Cloudflare's GitHub app.
 
 ### 3. Choose app keys and IDs
 
@@ -32,31 +31,26 @@ Create an `APPS` JSON value. Each key is an App-Key that you will put in an SDK;
 
 Use a separate key and ID for each app whose analytics you want to keep separate. To rotate a key, add the new key with the same ID, deploy, update the client, then remove the old key in a later deployment. Keys are visible in client apps, so treat them as routing identifiers, not passwords. See [Applications and origins](#applications-and-origins) for optional browser Origin restrictions.
 
-### 4. Add GitHub deployment settings
+### 4. Configure staging and production in Cloudflare
 
-In your fork, open **Settings → Environments**. Create two environments named exactly `staging` and `production`. In **each** environment, add these environment secrets:
+Create a `staging` branch in the fork. In Cloudflare, connect the repository to two Workers Builds projects, one for staging and one for production. Use these settings in each project's **Settings → Builds**. Replace `YOUR-SUBDOMAIN` with your Cloudflare `workers.dev` subdomain:
 
-| Secret | Value |
-| --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare Account ID from step 2 |
-| `CLOUDFLARE_API_TOKEN` | The restricted account-scoped API token from step 2 |
-| `APPS` | The JSON app-key mapping from step 3 |
+| Setting                     | Staging                                                      | Production                                           |
+| --------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| Git repository              | Your fork                                                    | Your fork                                            |
+| Production branch           | `staging`                                                    | `main`                                               |
+| Build command               | `npm run check`                                              | `npm run check`                                      |
+| Deploy command              | `node scripts/deploy.mjs staging`                            | `node scripts/deploy.mjs production`                 |
+| Build variable `WORKER_URL` | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` |
+| Worker name / dataset       | `aptabase-worker-staging` / `aptabase_events_v1_staging`     | `aptabase-worker` / `aptabase_events_v1`             |
 
-In each environment, add the environment **variable** `WORKER_URL` with the full HTTPS base URL for that Worker. Replace `YOUR-SUBDOMAIN` with your Cloudflare `workers.dev` subdomain:
-
-| Environment | URL | Dataset |
-| --- | --- | --- |
-| `staging` | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `aptabase_events_v1_staging` |
-| `production` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` | `aptabase_events_v1` |
-
-Keep both `APPS` values identical unless you intentionally want to accept different keys in staging and production. Optionally configure environment deployment protection for `production`; if you require an approval, GitHub will pause the automatic production release until that approval is granted. Do not require a production approval if you expect every `main` push to deploy without intervention.
+The `check` command runs formatting, dependency security audit, type generation check, TypeScript, tests, and a Wrangler dry run. Cloudflare then runs the deploy command and checks `/healthz`. Cloudflare Workers Builds automatically creates and manages its own deployment API token; do not add a Cloudflare token to GitHub secrets. For each Worker, add the `APPS` runtime secret once under **Settings → Variables & Secrets**. Set the same mapping in both environments unless you intentionally want different accepted keys.
 
 ### 5. Deploy and verify staging
 
-1. In the fork, open **Actions** and enable workflows if GitHub prompts you to do so.
-2. Select the **Check and release** workflow, click **Run workflow**, choose branch `main`, environment `staging`, and action `deploy`.
-3. Open the run and wait for the checks, staging deployment, and **Verify health** step to pass. The endpoint should return `{}` at `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/healthz`. Health confirms that the Worker can read its configuration and binding; it does not write a test event or prove Analytics Engine persistence.
-4. Send a sample event using the same host and one key in `APPS`:
+1. Push or merge the code to the `staging` branch. GitHub Actions runs the tests, and Cloudflare Workers Builds runs the build and staging deployment. Require the `Checks / check` status on pull requests into `staging` in GitHub branch protection.
+2. Wait for the Cloudflare build to deploy and pass its health check. The endpoint should return `{}` at `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/healthz`. Health confirms that the Worker can read its configuration and binding; it does not write a test event or prove Analytics Engine persistence.
+3. Send a sample event using the same host and one key in `APPS`:
 
    ```sh
    curl https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/api/v0/event \
@@ -69,15 +63,15 @@ Keep both `APPS` values identical unless you intentionally want to accept differ
 
 ### 6. Deploy production
 
-Every push or merge to `main` runs the checks and, if they pass, automatically deploys production using the `production` environment settings. Thus, after staging verification, merge your reviewed change to `main` to release it. The workflow runs the production `/healthz` check afterward. If a health check fails, the workflow reports failure; it does not automatically roll back. Use the manual rollback steps in [release verification](docs/verification.md) when needed.
+After staging verification, merge the reviewed `staging` branch into `main`. GitHub Actions runs the tests and Cloudflare Workers Builds builds and deploys production, then checks `/healthz`. If a health check fails, the Cloudflare build reports failure; it does not automatically roll back. Use Cloudflare's deployment history to roll back if needed.
 
-Every pull request runs checks and dry-run builds but does not deploy. You can also deploy production manually from **Actions → Check and release → Run workflow**, selecting branch `main`, environment `production`, and action `deploy`.
+Every pull request runs tests but does not deploy. Protect `main` with the passing GitHub Actions check before merging.
 
 ### 7. Connect your SDK
 
 Use the production base URL and the matching key from `APPS`. For setup examples, see [SDK setup](#sdk-setup). The host should contain only the scheme and hostname: do not add `/api/v0/event`, and do not add a trailing slash.
 
-All production publishing and rollback run in GitHub Actions. No local npm login or Cloudflare login is required for development, checks, or dry runs. CI deploys the Worker and `APPS` secret together using Wrangler's `--secrets-file`; configuration is never committed or passed as command-line secret values. See [Cloudflare's CI instructions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/). Use a restricted API token today; this workflow does not assume direct GitHub OIDC support. If an officially supported federation flow becomes available and is adopted, verify it and revoke the bootstrap token. Rotate/revoke temporary tokens as soon as they are replaced.
+Production publishing is handled by Cloudflare Workers Builds, while GitHub Actions only runs tests. The `APPS` value is a Worker runtime secret set in the Cloudflare dashboard; it is never committed or passed as a command-line value. Cloudflare manages the credential it uses to deploy, so no user-created API token is needed. The deployment script requires Cloudflare's Workers Builds environment marker.
 
 ## Applications and origins
 

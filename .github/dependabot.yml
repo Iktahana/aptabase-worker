@@ -27,3 +27,13 @@ updates:
     # ignore:
     #   - dependency-name: "wrangler"
     #     versions: [">=4.0.0"]
+  # Keep pinned GitHub Actions at current security releases.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    labels:
+      - "dependencies"
