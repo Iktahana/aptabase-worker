@@ -2,14 +2,14 @@
 
 ## Automated checks
 
-Run `npm ci` followed by `npm run check`. CI also builds both named environments with Wrangler dry runs. Tests execute in Workers' workerd runtime and cover both pinned SDK fixtures, multi-app routing and rotation, fixed schema mapping, debug flags, partial batches, failure responses, streaming size limits, UTF-8 boundaries, CORS, and sensitive-data exclusion from application logs.
+Run `npm ci` followed by `npm run check` for the full local validation. GitHub Actions runs `npm test` only. Cloudflare Workers Builds runs the full check and deploys after it passes. Tests execute in Workers' workerd runtime and cover both pinned SDK fixtures, multi-app routing and rotation, fixed schema mapping, debug flags, partial batches, failure responses, streaming size limits, UTF-8 boundaries, CORS, and sensitive-data exclusion from application logs.
 
 ## First staging acceptance
 
-1. Configure the `staging` GitHub Environment as described in the README. Run **Check and release** on `main`, choosing `staging` / `deploy`. Confirm the CI health step passes. Health checks cannot prove storage persistence.
-2. Run an actual Web SDK application against the staging host with its own `A-SH-*` key. Send `staging_web_check` with boolean property `enabled: true` and `isDebug: true`. Record the package version, commit, UTC send time, and workflow run URL. Avoid personal data.
+1. Configure Cloudflare Workers Builds for the `staging` branch as described in the README. Push to that branch and confirm GitHub Actions tests and the Cloudflare build and health check pass. Health checks cannot prove storage persistence.
+2. Run an actual Web SDK application against the staging host with its own `A-SH-*` key. Send `staging_web_check` with boolean property `enabled: true` and `isDebug: true`. Record the package version, commit, UTC send time, and Cloudflare build URL. Avoid personal data.
 3. Run an actual Swift SDK application with the pinned revision or record the tested version. Set `InitOptions(host: "YOUR_STAGING_BASE_URL", trackingMode: .asRelease)`. Send `staging_swift_check` and allow its flush interval to complete. Record version and UTC time.
-4. Using a separate account-scoped **read-only Analytics Engine token**, query the Analytics Engine SQL API from a private terminal or your preferred SQL client. Do not commit the token. The deployment token does not need SQL read access. Allow for data visibility delay. Example SQL:
+4. Using a separate account-scoped **read-only Analytics Engine token**, query the Analytics Engine SQL API from a private terminal or your preferred SQL client. Do not commit the token. This optional token is only for read-only data verification; it is unrelated to deployment and is not required to deploy the Worker. Allow for data visibility delay. Example SQL:
 
    ```sql
    SELECT timestamp, index1, blob1, blob2, blob3, blob4,
@@ -27,8 +27,8 @@ Run `npm ci` followed by `npm run check`. CI also builds both named environments
 5. Verify index1 and blob2 match each stable app ID; the session remains a string in blob4; Web boolean props are in blob16; Swift native fields are in blob6–11; double1 matches the client send time in milliseconds; double2 is 1 for the Web debug event and 0 for Swift release. Check country/region where available. Sampling can omit specific rows; absence is not proof of rejection. Use low-volume test apps, retry with distinct event names, and investigate if no rows become visible.
 6. Save an acceptance record with the above evidence and redacted row excerpts in your private release notes. Then permit production release. This repository does not claim real-SDK staging acceptance until those steps have been performed.
 
-## Rollback in CI
+## Rollback
 
-Find a known-good version UUID in Cloudflare's Worker deployment history (read-only inspection). In GitHub Actions run **Check and release** on `main`, choose the correct environment, select `rollback`, and paste the exact UUID. The workflow uses the same deployment concurrency lock, environment secrets, pinned actions, and health verification as deployments. It requires no local publishing credentials.
+Use Cloudflare's Worker deployment history to roll back to a known-good deployment. This is an operator action in the Cloudflare dashboard; GitHub Actions does not deploy or roll back Workers.
 
-Rollback restores the selected Worker version and its versioned configuration/secrets, including the earlier `APPS` value. It does not undo Analytics Engine writes. Review key rotations before rollback; the next push to `main` automatically redeploys the current main code and environment secret configuration. Health failure marks the workflow failed; rollback is an explicit manual operation.
+Rollback does not undo Analytics Engine writes. Review key rotations before rollback; the next push to the connected production branch deploys the current code. Health failure marks the Cloudflare build failed; rollback is an explicit manual operation.

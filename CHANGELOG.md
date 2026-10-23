@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Move Worker deployment from GitHub Actions to Cloudflare Workers Builds. GitHub Actions now runs tests only; Cloudflare manages deployment credentials internally.
+- Configure `APPS` as a runtime secret in each Cloudflare Worker.
+
 ## 1.0.0 — Unreleased
 
 - Add single and batch Aptabase event ingestion, multi-app key routing, key rotation, origin policies, bounded streaming reads, and health checks.
