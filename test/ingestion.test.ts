@@ -328,6 +328,29 @@ describe("operations and privacy", () => {
         .status,
     ).toBe(503);
   });
+  it("explains app setup only when APPS is missing or invalid", async () => {
+    const { bindings, writeDataPoint } = setup();
+    for (const APPS of [undefined, "", "{", "{}"]) {
+      const broken = { ...bindings };
+      if (APPS === undefined) Reflect.deleteProperty(broken, "APPS");
+      else broken.APPS = APPS;
+      for (const req of [
+        request(),
+        new Request("https://worker.test/healthz"),
+      ]) {
+        const response = await worker.fetch(req, broken);
+        expect(response.status).toBe(503);
+        const body = await response.json<{ error: string }>();
+        expect(body.error).toContain("APPS secret");
+        expect(body.error).toContain("README.md#2-define-your-apps");
+      }
+    }
+    const broken = { ...bindings };
+    Reflect.deleteProperty(broken, "EVENTS");
+    const response = await worker.fetch(request(), broken);
+    expect(await response.json()).toEqual({ error: "service_unavailable" });
+    expect(writeDataPoint).not.toHaveBeenCalled();
+  });
   it("emits only aggregate counts and fixed reason codes", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const { bindings } = setup();

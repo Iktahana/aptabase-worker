@@ -76,7 +76,9 @@ export default {
                   ? "Missing App-Key header. Events are not being recorded."
                   : code === "unknown_key"
                     ? "Unknown App-Key. Events are not being recorded."
-                    : code,
+                    : code === "apps_not_configured"
+                      ? "Configure a valid APPS secret in Cloudflare Settings > Variables & Secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps"
+                      : code,
             }
           : {},
         { status, headers },
@@ -97,6 +99,10 @@ export default {
     let limit: number;
     try {
       apps = parseApps(env.APPS);
+    } catch {
+      return response(503, "apps_not_configured");
+    }
+    try {
       limit = bodyLimit(env.MAX_BODY_BYTES);
       if (typeof env.EVENTS?.writeDataPoint !== "function")
         throw new Error("binding_unavailable");

@@ -9,8 +9,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
-    "build": "wrangler deploy --env=\"\" --dry-run --outdir dist",
-    "check": "npm run lint && npm audit --audit-level=moderate && npm run types -- --check && npm run typecheck && npm test && npm run build"
+    "build": "npm run lint && npm audit --audit-level=moderate && npm run types -- --check && npm run typecheck && npm test && wrangler deploy --dry-run --outdir dist",
+    "check": "npm run build"
   },
   "repository": {
     "type": "git",

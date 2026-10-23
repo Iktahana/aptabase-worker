@@ -27,7 +27,7 @@ One event becomes one data point. The combined UTF-8 size of all encoded blobs m
 
 ## Frozen Analytics Engine columns
 
-Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`. Local development: `aptabase_events_v1_dev`.
+Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`. Worker Previews: `aptabase_events_v1_preview`. Local development uses the same dataset name as the base configuration, but Wrangler simulates the binding locally and does not write to the remote dataset.
 
 | Column    | Value                                     |
 | --------- | ----------------------------------------- |

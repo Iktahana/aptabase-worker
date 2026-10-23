@@ -6,7 +6,7 @@ This project implements the **event ingestion protocol only**. It does not imple
 
 ## Step-by-step deployment
 
-This guide creates separate staging and production Workers, each with its own Analytics Engine dataset. One Worker can receive events for multiple apps.
+The basic setup deploys one production Worker. It can receive events for multiple apps. Add staging later if you need a separate test endpoint.
 
 ### 1. Fork the repository and prepare Cloudflare
 
@@ -25,39 +25,28 @@ Create an `APPS` JSON mapping. Each key is the App-Key used by an SDK; each `id`
 
 Use a different ID for each app you want to report separately. You can map multiple keys to one ID to rotate keys later.
 
-### 3. Create the staging and production Workers
+### 3. Connect and deploy
 
-Create a `staging` branch in your fork. In Cloudflare, create two Workers Builds projects connected to the fork. Set their build options as follows; replace `YOUR-SUBDOMAIN` with your `workers.dev` subdomain.
+In **Workers & Pages → Create application → GitHub**, select your fork. Keep the default project name `aptabase-worker` and leave the Build, Deploy, and Preview commands unchanged. The base Wrangler configuration targets production, so the default `npx wrangler deploy` command uses the production dataset. Keep Preview builds enabled; preview branches use their own Analytics Engine dataset. Preview builds do not inherit production secrets; add `APPS` to **Previews Base** if you want preview URLs to accept events.
 
-| Setting                     | Staging                                                      | Production                                           |
-| --------------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
-| Git repository              | Your fork                                                    | Your fork                                            |
-| Production branch           | `staging`                                                    | `main`                                               |
-| Build command               | `npm run check`                                              | `npm run check`                                      |
-| Deploy command              | `node scripts/deploy.mjs staging`                            | `node scripts/deploy.mjs production`                 |
-| Build variable `WORKER_URL` | `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev` | `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` |
-| Worker name / dataset       | `aptabase-worker-staging` / `aptabase_events_v1_staging`     | `aptabase-worker` / `aptabase_events_v1`             |
+Select **Deploy**. The default `npm run build` runs formatting checks, dependency audit, type checks, tests, and a Wrangler dry-run before deployment. After the first build, open the Worker’s **Settings → Variables & Secrets**, add a secret named `APPS`, and paste the JSON from step 2. The endpoint will work once this secret is set.
 
-For each Worker, open **Settings → Variables & Secrets** and add `APPS` with the JSON from step 2. Cloudflare creates the Analytics Engine datasets on first write. Workers Builds runs `npm run check`, deploys the Worker, then checks `/healthz`.
+### 4. Deploy and connect your SDK
 
-### 4. Deploy and test staging
-
-Push a change to `staging` and wait for the Cloudflare build to finish. Send a test event to the staging URL using a key from `APPS`:
+Push to `main` and wait for the Cloudflare build to finish. Check `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev/healthz` returns `{}`. Then send a test event using a key from `APPS`:
 
 ```sh
-curl https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/api/v0/event \
+curl https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev/api/v0/event \
   -H 'Content-Type: application/json' \
   -H 'App-Key: A-SH-WEBSITE' \
-  --data '{"timestamp":"2026-10-23T12:00:00Z","sessionId":"manual-check-1","eventName":"staging_check","systemProps":{"isDebug":true},"props":{"enabled":true}}'
+  --data '{"timestamp":"2026-10-23T12:00:00Z","sessionId":"manual-check-1","eventName":"first_event","props":{"enabled":true}}'
 ```
 
-The Worker should return `200 {}`. The health endpoint is `https://aptabase-worker-staging.YOUR-SUBDOMAIN.workers.dev/healthz`. For a full SDK and data check, follow [staging verification](docs/verification.md).
+The Worker should return `200 {}`. Set your SDK host to `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` and use the matching App-Key from `APPS`. See [SDK setup](#sdk-setup) for Web and Swift examples.
 
-### 5. Deploy production and connect your SDK
+To add a staging Worker later, connect a second Worker named `aptabase-worker-staging` to a `staging` branch. For that Worker only, set the deploy command to `node scripts/deploy.mjs staging`, add the same `APPS` secret, and set the `WORKER_URL` build variable. It uses `wrangler.staging.jsonc` and writes to `aptabase_events_v1_staging`.
 
-After staging works, merge `staging` into `main`. Cloudflare Builds deploys production. Set your SDK host to `https://aptabase-worker.YOUR-SUBDOMAIN.workers.dev` and use the corresponding App-Key from `APPS`. See [SDK setup](#sdk-setup) for Web and Swift examples.
-
-GitHub Actions runs tests on pull requests. Cloudflare Workers Builds handles validation and deployment for pushes to the configured branches.
+GitHub Actions runs tests on pull requests. Cloudflare Workers Builds handles validation and deployment on pushes to `main`.
 
 ## Applications and origins
 
