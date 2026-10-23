@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Serve robots.txt and noindex response headers; document SDK endpoint allowlists and optional WAF restrictions.
+
 - Pin event response compatibility to Aptabase 4cca4bb: lock/key messages, text validation errors, safe problem JSON, empty 429 responses, and quota prechecks before media validation. Preserve data rules and document SDK retry behavior.
 
 - Preserve dashboard runtime variables during deployment and supply optional limits from code defaults.

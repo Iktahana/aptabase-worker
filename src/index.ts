@@ -55,7 +55,15 @@ export default {
     const headers = new Headers({
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex",
     });
+    if (path === "/robots.txt" && ["GET", "HEAD"].includes(request.method)) {
+      headers.set("Content-Type", "text/plain; charset=utf-8");
+      return new Response(
+        request.method === "HEAD" ? null : "User-agent: *\nDisallow: /\n",
+        { status: 200, headers },
+      );
+    }
     let received = 0;
     let submitted = 0;
     let dropped = 0;

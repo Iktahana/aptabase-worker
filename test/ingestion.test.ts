@@ -851,3 +851,42 @@ describe("platform failure response contracts", () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain("private-exception");
   });
 });
+
+describe("crawler directives", () => {
+  it("serves keyless robots directives without configuration or storage access", async () => {
+    const { bindings, writeDataPoint } = setup();
+    bindings.APPS = "invalid";
+    const getByName = vi.fn(() => {
+      throw new Error("must not access counters");
+    });
+    Reflect.set(bindings, "INGESTION_GUARD", { getByName });
+    for (const method of ["GET", "HEAD"]) {
+      const result = await worker.fetch(
+        new Request("https://worker.test/robots.txt", { method }),
+        bindings,
+      );
+      expect(result.status).toBe(200);
+      expect(result.headers.get("Content-Type")).toBe(
+        "text/plain; charset=utf-8",
+      );
+      expect(result.headers.get("X-Robots-Tag")).toBe("noindex");
+      expect(await result.text()).toBe(
+        method === "GET" ? "User-agent: *\nDisallow: /\n" : "",
+      );
+    }
+    expect(getByName).not.toHaveBeenCalled();
+    expect(writeDataPoint).not.toHaveBeenCalled();
+  });
+  it("adds noindex to success, errors and CORS preflights", async () => {
+    const { bindings } = setup();
+    for (const req of [
+      request(),
+      request([]),
+      new Request("https://worker.test/unknown"),
+      new Request("https://worker.test/api/v0/events", { method: "OPTIONS" }),
+    ]) {
+      const result = await worker.fetch(req, bindings);
+      expect(result.headers.get("X-Robots-Tag")).toBe("noindex");
+    }
+  });
+});

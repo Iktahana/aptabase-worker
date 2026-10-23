@@ -2,6 +2,7 @@
 
 ## HTTP
 
+All Worker responses include `X-Robots-Tag: noindex`. `GET /robots.txt` returns `User-agent: *` and `Disallow: /`; HEAD returns the same headers with no body. Robots responses require no app configuration or bindings and do not access counters or analytics. These are voluntary crawler/indexing directives, not access control. See [WAF guidance](waf.md) for endpoint restrictions.
 - `POST /api/v0/event`: one object; invalid events return 400.
 - `POST /api/v0/events`: an array of at most 25 entries; invalid entries are skipped, valid entries are written. Empty and entirely invalid batches return `200 {}` with no writes.
 - Both paths accept `OPTIONS` without an App-Key and return 204.
