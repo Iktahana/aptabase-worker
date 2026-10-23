@@ -8,13 +8,13 @@ You need a GitHub account and a Cloudflare account.
 
 ### 1. Fork and deploy
 
-[Fork this repository](https://github.com/Iktahana/aptabase-worker/fork). In Cloudflare, go to **Workers & Pages → Create application → GitHub** and select your fork.
+[Fork this repository](https://github.com/Iktahana/aptabase-worker/fork). In Cloudflare, open **Workers & Pages**, choose **Create application**, and connect your fork from GitHub.
 
 Choose a Worker name, keep all other settings at their defaults, and click **Deploy**. If prompted, set up your `workers.dev` subdomain. Wait for deployment to finish and copy your Worker URL.
 
 ### 2. Define your apps
 
-Open the Worker’s **Settings → Variables & Secrets → Add**. Select **Secret**, name it `APPS`, and paste:
+Open your Worker’s **Settings** and add an environment variable. In the **Add environment variable** dialog, keep **Production** selected, enter `APPS` under **Key**, check **Secret**, and paste this JSON under **Value**:
 
 ```json
 {
@@ -22,7 +22,7 @@ Open the Worker’s **Settings → Variables & Secrets → Add**. Select **Secre
 }
 ```
 
-Save and deploy the secret. This creates your first app: `A-SH-MYAPP` is the key your SDK sends; `my-app` is its label in stored events. Choose your own values and use the same key in the next step.
+Click **Add variable and deploy**. This creates your first app: `A-SH-MYAPP` is the key your SDK sends; `my-app` is its label in stored events. Choose your own values and use the same key in the next step.
 
 Open `https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/healthz`. A response of `{}` means setup is complete.
 
