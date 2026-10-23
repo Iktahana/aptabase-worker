@@ -3,11 +3,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-23",
   "compatibility_flags": ["nodejs_compat"],
-  "vars": {
-    "MAX_BODY_BYTES": "524288",
-    "RATE_LIMIT_PER_SECOND": "20",
-    "MONTHLY_EVENT_LIMIT": "20000"
-  },
   "analytics_engine_datasets": [
     {
       "binding": "EVENTS",
@@ -31,5 +26,6 @@
       "tag": "v1-guard",
       "new_sqlite_classes": ["IngestionGuard"]
     }
-  ]
+  ],
+  "keep_vars": true
 }

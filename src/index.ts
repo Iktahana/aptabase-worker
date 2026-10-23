@@ -80,7 +80,7 @@ export default {
                   : code === "unknown_key"
                     ? "Unknown App-Key. Events are not being recorded."
                     : code === "apps_not_configured"
-                      ? "Configure a valid APPS secret in Cloudflare Settings > Variables & Secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps"
+                      ? "Configure a valid APPS variable in Cloudflare Settings > Runtime variables and secrets. See https://github.com/Iktahana/aptabase-worker/blob/main/README.md#2-define-your-apps"
                       : code,
             }
           : {},

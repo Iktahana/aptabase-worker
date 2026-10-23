@@ -6,7 +6,7 @@ import {
 } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encode } from "../src/analytics";
-import { parseApps } from "../src/config";
+import { bodyLimit, parseApps, protectionLimit } from "../src/config";
 import { normalize } from "../src/event";
 import worker from "../src/index";
 import swift from "./fixtures/swift.json";
@@ -348,7 +348,7 @@ describe("operations and privacy", () => {
         const response = await worker.fetch(req, broken);
         expect(response.status).toBe(503);
         const body = await response.json<{ error: string }>();
-        expect(body.error).toContain("APPS secret");
+        expect(body.error).toContain("APPS variable");
         expect(body.error).toContain("README.md#2-define-your-apps");
       }
     }
@@ -657,5 +657,26 @@ describe("abuse protection", () => {
     expect(await rate.request(1)).toBe(true);
     expect(await runDurableObjectAlarm(rate)).toBe(true);
     expect(await rate.request(1)).toBe(true);
+  });
+});
+
+describe("dashboard configuration", () => {
+  it("uses safe defaults when optional runtime variables are absent", async () => {
+    expect(bodyLimit(undefined)).toBe(524288);
+    expect(protectionLimit(undefined, 20)).toBe(20);
+    expect(protectionLimit(undefined, 20000)).toBe(20000);
+    const { bindings, writeDataPoint } = setup();
+    for (const key of [
+      "MAX_BODY_BYTES",
+      "RATE_LIMIT_PER_SECOND",
+      "MONTHLY_EVENT_LIMIT",
+    ])
+      Reflect.deleteProperty(bindings, key);
+    const response = await worker.fetch(
+      request(web, undefined, { "CF-Connecting-IP": crypto.randomUUID() }),
+      bindings,
+    );
+    expect(response.status).toBe(200);
+    expect(writeDataPoint).toHaveBeenCalledTimes(1);
   });
 });

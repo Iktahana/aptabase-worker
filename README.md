@@ -14,7 +14,7 @@ Choose a Worker name, keep all other settings at their defaults, and click **Dep
 
 ### 2. Define your apps
 
-Open your Worker’s **Settings → Runtime variables and secrets**. Keep **Production** selected and click **Add variable**. In the **Add environment variable** dialog, keep **Production** selected, enter `APPS` under **Key**, check **Secret**, and paste this JSON under **Value**:
+Open your Worker’s **Settings → Runtime variables and secrets**. Keep **Production** selected and click **Add variable**. In the **Add environment variable** dialog, keep **Production** selected, enter `APPS` under **Key**, and paste this JSON under **Value**:
 
 ```json
 {
@@ -53,9 +53,11 @@ Future pushes to `main` deploy automatically through Cloudflare Workers Builds.
 
 The defaults allow **20 requests per IP per second** and **20,000 events per app per month**. The following settings are optional.
 
+Manage runtime settings in the Cloudflare dashboard. `keep_vars: true` preserves them across CI deployments; Wrangler manages resource bindings and migrations. `APPS` may be a regular variable or a Secret. Existing secrets continue to work. Runtime settings are independent of Git rollbacks.
+
 ### Apps, keys, and origins
 
-Example `APPS` secret (replace the example SDK keys):
+Example `APPS` variable (replace the example SDK keys):
 
 ```json
 {
@@ -78,7 +80,7 @@ Defaults match Aptabase’s ingestion rate and free monthly allowance:
 | `RATE_LIMIT_PER_SECOND` | `20`    | Requests per IP per fixed one-second window, across apps and both event endpoints |
 | `MONTHLY_EVENT_LIMIT`   | `20000` | Valid events per stable app ID per UTC calendar month                             |
 
-Set either variable to `0` to disable that protection. Change the values in `wrangler.jsonc` (`vars` and `previews.vars`); use `wrangler.staging.jsonc` for staging. Invalid settings return 503.
+To change a limit, add or edit its variable in **Settings → Runtime variables and secrets → Production**. Set it to `0` to disable that protection. Omitted values use the defaults above. `MAX_BODY_BYTES` optionally lowers the body limit from `524288` bytes (512 KiB). Invalid settings return 503.
 
 Limits use Durable Objects, provisioned automatically on deployment. Preview counters are isolated from production. Missing client IPs share one rate bucket in local development. Rate rejection returns `429` with `Retry-After: 1`; exhausted quotas return `200 {"error":"monthly_quota_exceeded"}` to stop SDK retries. An exhausted app is rejected before its body is read. Batches exceeding the remaining quota are rejected as a whole. Only valid events reserve quota, before Analytics Engine submission; failed writes and duplicate retries can consume quota. Raising the limit resumes ingestion; month rollover resets it automatically. Unlike Aptabase’s account-wide allowance, this project gives each app its own allowance.
 
@@ -86,9 +88,9 @@ To pause an app, add `"disabled": true` to its entry in `APPS`. This blocks ever
 
 ### Previews and staging
 
-Preview builds use a separate Analytics Engine dataset and isolated Durable Object counters. To accept events on preview URLs, add the `APPS` secret to **Previews Base** in Cloudflare; production secrets are not inherited.
+Preview builds use a separate Analytics Engine dataset and isolated Durable Object counters. To accept events on preview URLs, add the `APPS` variable to **Previews Base** in Cloudflare; production variables are not inherited. Optional limit overrides can be set there too.
 
-For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging`, add its `APPS` runtime secret, and set its `WORKER_URL` build variable to the staging URL. The configuration in `wrangler.staging.jsonc` uses the `aptabase_events_v1_staging` dataset.
+For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging`, add its `APPS` runtime variable, and set its `WORKER_URL` build variable to the staging URL. The configuration in `wrangler.staging.jsonc` uses the `aptabase_events_v1_staging` dataset.
 
 ### Deployment behavior
 

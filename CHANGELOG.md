@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve dashboard runtime variables during deployment and supply optional limits from code defaults.
+
 - Add configurable IP request limits, monthly per-app quotas, and app disabling with Durable Object counters.
 - Let Workers Builds supply the Worker name so forks can choose their own name.
 
