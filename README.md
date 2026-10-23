@@ -14,7 +14,7 @@ Choose a Worker name, keep all other settings at their defaults, and click **Dep
 
 ### 2. Define your apps
 
-Open your Worker’s **Settings** and add an environment variable. In the **Add environment variable** dialog, keep **Production** selected, enter `APPS` under **Key**, check **Secret**, and paste this JSON under **Value**:
+Open your Worker’s **Settings → Runtime variables and secrets**. Keep **Production** selected and click **Add variable**. In the **Add environment variable** dialog, keep **Production** selected, enter `APPS` under **Key**, check **Secret**, and paste this JSON under **Value**:
 
 ```json
 {
