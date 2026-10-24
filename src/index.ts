@@ -1,4 +1,4 @@
-import { encode, write } from "./analytics";
+import { encode, trustedLocation, write } from "./analytics";
 import { bodyLimit, parseApps, protectionLimit } from "./config";
 import { normalize } from "./event";
 import { ipGuardName } from "./guard";
@@ -118,14 +118,15 @@ export default {
     }
     if (!ingestion) return response(200);
     try {
-      if (
-        rateLimit &&
-        !(await env.INGESTION_GUARD.getByName(
-          await ipGuardName(request),
-        ).request(rateLimit))
-      ) {
-        headers.set("Retry-After", "1");
-        return response(429, "rate_limited");
+      if (rateLimit) {
+        const name = await ipGuardName(request);
+        if (
+          !name ||
+          !(await env.INGESTION_GUARD.getByName(name).request(rateLimit))
+        ) {
+          headers.set("Retry-After", "1");
+          return response(429, "rate_limited");
+        }
       }
     } catch {
       return response(503, "service_unavailable");
@@ -191,16 +192,7 @@ export default {
     for (const value of values) {
       const event = normalize(value);
       const point = event
-        ? encode(event, app.id, {
-            country:
-              typeof request.cf?.country === "string"
-                ? request.cf.country
-                : undefined,
-            region:
-              typeof request.cf?.region === "string"
-                ? request.cf.region
-                : undefined,
-          })
+        ? encode(event, app.id, trustedLocation(request.cf))
         : null;
       if (point) points.push(point);
       else {

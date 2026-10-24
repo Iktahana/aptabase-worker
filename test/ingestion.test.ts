@@ -44,7 +44,10 @@ afterEach(() => vi.restoreAllMocks());
 describe("SDK ingestion", () => {
   it("runs through the deployed fetch entry point in workerd", async () => {
     const result = await SELF.fetch(
-      request(web, "/api/v0/event", { "App-Key": "A-SH-TEST" }),
+      request(web, "/api/v0/event", {
+        "App-Key": "A-SH-TEST",
+        "CF-Connecting-IP": "198.51.100.10",
+      }),
     );
     expect(result.status).toBe(200);
     expect(await result.json()).toEqual({});
@@ -52,7 +55,7 @@ describe("SDK ingestion", () => {
   it("freezes all columns, milliseconds, opaque sessions, and trusted geography", async () => {
     const { bindings, writeDataPoint } = setup();
     const req = new Request(request(), {
-      cf: { country: "JP", region: "Tokyo" },
+      cf: { country: "JP", region: "Tokyo", regionCode: "13" },
     });
     const result = await worker.fetch(req, bindings);
     expect(result.status).toBe(200);
@@ -76,9 +79,47 @@ describe("SDK ingestion", () => {
         "Tokyo",
         JSON.stringify(web.props),
         "{}",
+        "13",
       ],
       doubles: [Date.parse(web.timestamp), 1],
     });
+  });
+  it("normalizes country and region code and drops unusable region names", async () => {
+    const { bindings, writeDataPoint } = setup();
+    const cases = [
+      {
+        cf: { country: " jp ", region: "  Tokyo  ", regionCode: "13" },
+        country: "JP",
+        region: "Tokyo",
+        code: "13",
+      },
+      {
+        cf: { country: "Japan", region: "x".repeat(65), regionCode: "JP-13" },
+        country: "",
+        region: "",
+        code: "",
+      },
+      {
+        cf: { country: "t1", region: "x".repeat(64), regionCode: "tx" },
+        country: "T1",
+        region: "x".repeat(64),
+        code: "TX",
+      },
+      { cf: { country: "xx" }, country: "XX", region: "", code: "" },
+    ];
+    for (const item of cases) {
+      expect(
+        (await worker.fetch(new Request(request(), { cf: item.cf }), bindings))
+          .status,
+      ).toBe(200);
+    }
+    expect(
+      writeDataPoint.mock.calls.map(([point]) => [
+        point?.blobs?.[13],
+        point?.blobs?.[14],
+        point?.blobs?.[17],
+      ]),
+    ).toEqual(cases.map((item) => [item.country, item.region, item.code]));
   });
   it("accepts Swift batches and absent props", async () => {
     const { bindings, writeDataPoint } = setup();
@@ -136,6 +177,7 @@ describe("SDK ingestion", () => {
       "",
       "{}",
       '{"future":{"value":1}}',
+      "",
     ]);
     expect(normalize({ ...body, systemProps: undefined })?.system.osName).toBe(
       "",
@@ -523,7 +565,7 @@ describe("abuse protection", () => {
   it("limits requests per trusted IP before reading bodies, including unknown keys", async () => {
     const { bindings, writeDataPoint } = setup();
     Reflect.set(bindings, "RATE_LIMIT_PER_SECOND", "1");
-    const ip = `test-${crypto.randomUUID()}`;
+    const ip = "203.0.113.10";
     const first = request(web, undefined, { "CF-Connecting-IP": ip });
     expect((await worker.fetch(first, bindings)).status).toBe(200);
     const second = request(web, undefined, {
@@ -538,7 +580,57 @@ describe("abuse protection", () => {
     expect(
       (
         await worker.fetch(
-          request(web, undefined, { "CF-Connecting-IP": `other-${ip}` }),
+          request(web, undefined, { "CF-Connecting-IP": "203.0.113.11" }),
+          bindings,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await worker.fetch(
+          request(web, undefined, {
+            "CF-Connecting-IP": "::ffff:203.0.113.10",
+          }),
+          bindings,
+        )
+      ).status,
+    ).toBe(429);
+    expect(writeDataPoint).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares an IPv6 /64 and rejects a missing or unparseable address before reading", async () => {
+    const { bindings, writeDataPoint } = setup();
+    Reflect.set(bindings, "RATE_LIMIT_PER_SECOND", "1");
+    const getByName = vi.spyOn(bindings.INGESTION_GUARD, "getByName");
+    const missing = request(web);
+    expect((await worker.fetch(missing, bindings)).status).toBe(429);
+    expect(missing.bodyUsed).toBe(false);
+    const invalid = request(web, undefined, {
+      "CF-Connecting-IP": "not-an-ip",
+    });
+    expect((await worker.fetch(invalid, bindings)).status).toBe(429);
+    expect(invalid.bodyUsed).toBe(false);
+    expect(getByName).not.toHaveBeenCalled();
+    expect(
+      (
+        await worker.fetch(
+          request(web, undefined, { "CF-Connecting-IP": "2001:db8:1:2::1" }),
+          bindings,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await worker.fetch(
+          request(web, undefined, { "CF-Connecting-IP": "2001:db8:1:2::abcd" }),
+          bindings,
+        )
+      ).status,
+    ).toBe(429);
+    expect(
+      (
+        await worker.fetch(
+          request(web, undefined, { "CF-Connecting-IP": "2001:db8:1:3::1" }),
           bindings,
         )
       ).status,
@@ -678,7 +770,7 @@ describe("dashboard configuration", () => {
     ])
       Reflect.deleteProperty(bindings, key);
     const response = await worker.fetch(
-      request(web, undefined, { "CF-Connecting-IP": crypto.randomUUID() }),
+      request(web, undefined, { "CF-Connecting-IP": "198.51.100.20" }),
       bindings,
     );
     expect(response.status).toBe(200);
@@ -796,7 +888,7 @@ describe("HTTP response contract", () => {
   it("returns an empty rate rejection and retains the Retry-After extension", async () => {
     const { bindings } = setup();
     Reflect.set(bindings, "RATE_LIMIT_PER_SECOND", "1");
-    const headers = { "CF-Connecting-IP": crypto.randomUUID() };
+    const headers = { "CF-Connecting-IP": "198.51.100.30" };
     await worker.fetch(request(web, undefined, headers), bindings);
     const result = await worker.fetch(
       request(web, undefined, headers),

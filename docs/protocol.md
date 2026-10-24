@@ -52,31 +52,34 @@ One event becomes one data point. The combined UTF-8 size of all encoded blobs m
 
 Production dataset: `aptabase_events_v1`. Staging: `aptabase_events_v1_staging`. Worker Previews: `aptabase_events_v1_preview`. Local development uses the same dataset name as the base configuration, but Wrangler simulates the binding locally and does not write to the remote dataset.
 
-| Column    | Value                                     |
-| --------- | ----------------------------------------- |
-| index1    | Stable app ID; sampling group             |
-| blob1     | Schema version, string `1`                |
-| blob2     | Stable app ID                             |
-| blob3     | Event name                                |
-| blob4     | Opaque session ID                         |
-| blob5     | Locale                                    |
-| blob6     | OS name                                   |
-| blob7     | OS version                                |
-| blob8     | Device model                              |
-| blob9     | App version                               |
-| blob10    | App build number                          |
-| blob11    | SDK version                               |
-| blob12    | Engine name                               |
-| blob13    | Engine version                            |
-| blob14    | Country from trusted `request.cf.country` |
-| blob15    | Region from trusted `request.cf.region`   |
-| blob16    | Custom properties JSON                    |
-| blob17    | Extra system properties JSON              |
-| double1   | Client event time, Unix milliseconds      |
-| double2   | Debug flag, 0 or 1                        |
-| timestamp | Analytics Engine reception time           |
+| Column    | Value                                                                                              |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| index1    | Stable app ID; sampling group                                                                      |
+| blob1     | Schema version, string `1`                                                                         |
+| blob2     | Stable app ID                                                                                      |
+| blob3     | Event name                                                                                         |
+| blob4     | Opaque session ID                                                                                  |
+| blob5     | Locale                                                                                             |
+| blob6     | OS name                                                                                            |
+| blob7     | OS version                                                                                         |
+| blob8     | Device model                                                                                       |
+| blob9     | App version                                                                                        |
+| blob10    | App build number                                                                                   |
+| blob11    | SDK version                                                                                        |
+| blob12    | Engine name                                                                                        |
+| blob13    | Engine version                                                                                     |
+| blob14    | Normalized country: uppercase `request.cf.country` when it is `T1` or two letters, otherwise empty |
+| blob15    | Trimmed `request.cf.region`, kept only when its UTF-8 size is at most 64 bytes                     |
+| blob16    | Custom properties JSON                                                                             |
+| blob17    | Extra system properties JSON                                                                       |
+| blob18    | Normalized `request.cf.regionCode`: uppercase, one to three letters or digits, otherwise empty     |
+| double1   | Client event time, Unix milliseconds                                                               |
+| double2   | Debug flag, 0 or 1                                                                                 |
+| timestamp | Analytics Engine reception time                                                                    |
 
 Client and reception timestamps serve different purposes; select the appropriate one explicitly in future aggregations. Schema evolution only appends fields without changing existing meanings. Incompatible changes require a new dataset.
+
+`blob14` keeps Cloudflare's `XX` and uses `T1` for Tor. Empty `blob14`, `blob15`, or `blob18` means the value was missing or rejected. Rows written before region codes were stored also have an empty `blob18`. These columns estimate the egress IP's location. Do not fill gaps from `blob5`, which is the client locale. Aggregate counts with `sum(_sample_interval)`. Group countries by `blob14`, leaving `T1` and empty values separate. Group regions by `blob14` and `blob18`, using `blob15` only as a label, and show regions inside one country. City, postal code, and coordinates are not stored.
 
 Future daily archives should use UTC date partitions, repeatable jobs, and processing checkpoints. Recovering complete raw events from sampled AE results is impossible; full raw archives require an additional durable ingestion path. No archival or query endpoint is included in v1.
 

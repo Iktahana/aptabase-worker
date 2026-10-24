@@ -18,7 +18,7 @@ For a response-only release, run the full local check, push the verified commit 
    ```sql
    SELECT timestamp, index1, blob1, blob2, blob3, blob4,
           blob5, blob6, blob7, blob8, blob9, blob10, blob11,
-          blob12, blob13, blob14, blob15, blob16, blob17,
+          blob12, blob13, blob14, blob15, blob16, blob17, blob18,
           double1, double2, _sample_interval
    FROM aptabase_events_v1_staging
    WHERE timestamp > NOW() - INTERVAL '1' HOUR
@@ -28,7 +28,7 @@ For a response-only release, run the full local check, push the verified commit 
    ```
 
    Submit this as a POST body to `https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/analytics_engine/sql` with `Authorization: Bearer YOUR_READ_ONLY_TOKEN`. See the [SQL API reference](https://developers.cloudflare.com/analytics/analytics-engine/sql-api/).
-5. Verify index1 and blob2 match each stable app ID; the session remains a string in blob4; Web boolean props are in blob16; Swift native fields are in blob6–11; double1 matches the client send time in milliseconds; double2 is 1 for the Web debug event and 0 for Swift release. Check country/region where available. Sampling can omit specific rows; absence is not proof of rejection. Use low-volume test apps, retry with distinct event names, and investigate if no rows become visible.
+5. Verify index1 and blob2 match each stable app ID; the session remains a string in blob4; Web boolean props are in blob16; Swift native fields are in blob6–11; double1 matches the client send time in milliseconds; double2 is 1 for the Web debug event and 0 for Swift release. Check country (`blob14`), region name (`blob15`), and region code (`blob18`) where available. Sampling can omit specific rows; absence is not proof of rejection. Use low-volume test apps, retry with distinct event names, and investigate if no rows become visible.
 6. Save an acceptance record with the above evidence and redacted row excerpts in your private release notes. Then permit production release. This repository does not claim real-SDK staging acceptance until those steps have been performed.
 
 ## Rollback
