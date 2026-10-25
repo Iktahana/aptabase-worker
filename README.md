@@ -90,11 +90,11 @@ To pause an app, add `"disabled": true` to its entry in `APPS`. This blocks ever
 
 Preview builds use a separate Analytics Engine dataset and isolated Durable Object counters. To accept events on preview URLs, add the `APPS` variable to **Previews Base** in Cloudflare; production variables are not inherited. Optional limit overrides can be set there too.
 
-For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging`, add its `APPS` runtime variable, and set its `WORKER_URL` build variable to the staging URL. Its default dataset is `aptabase_events_v1_staging`.
+For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging` and add its `APPS` runtime variable. Its default dataset is `aptabase_events_v1_staging`. Production and staging deployments then check the `workers.dev` URL that Wrangler reports. No address variable is required.
 
 ### Resource names
 
-The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files. To use different names without forking, set the production deploy command to `node scripts/deploy.mjs production` and the build command to `npm run build`. Then add the build variables below on that Worker, in the same Builds settings as `WORKER_URL`. `npx wrangler deploy` ignores them. They are not runtime variables. Editing the R2 or dataset binding in the dashboard does not stick; the next deploy writes the build variable, or the default when the variable is unset.
+The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files. To use different names without forking, set the production deploy command to `node scripts/deploy.mjs production` and the build command to `npm run build`. Then add the build variables below on that Worker, under **Settings → Builds → Variables and secrets**. `npx wrangler deploy` ignores them. They are not runtime variables. Editing the R2 or dataset binding in the dashboard does not stick; the next deploy writes the build variable, or the default when the variable is unset.
 
 | Build variable           | Production default           | Staging default              |
 | ------------------------ | ---------------------------- | ---------------------------- |
@@ -108,7 +108,7 @@ A bucket name is 3–63 characters, uses lowercase letters, digits, and hyphens,
 
 ### Deployment behavior
 
-Workers Builds supplies the Worker name and provisions the Analytics Engine binding and SQLite-backed Durable Objects. The default `npm run build` validates formatting, dependencies, types, tests, and the Worker bundle before deployment. GitHub Actions runs tests only.
+Workers Builds supplies the Worker name and provisions the Analytics Engine binding and SQLite-backed Durable Objects. The default `npm run build` validates formatting, dependencies, types, tests, and the Worker bundle before deployment. GitHub Actions runs tests only. After publishing, production and staging read the `workers.dev` address from Wrangler's deployment record and request `/healthz` there. Disabling that `workers.dev` route removes the address this check can call.
 
 ### Verify an event without an SDK
 

@@ -4,6 +4,7 @@ import {
   resourceOverrides,
   wranglerCommand,
 } from "../scripts/bindings.mjs";
+import { workersDevUrlFromOutput } from "../scripts/health.mjs";
 import { parseJsonc } from "../scripts/jsonc.mjs";
 
 function config() {
@@ -106,5 +107,51 @@ describe("deployment resource names", () => {
     expect(() =>
       resourceOverrides({ PREVIEW_EVENTS_DATASET: "events_preview" }, false),
     ).toThrow("PREVIEW_EVENTS_DATASET applies only to the production");
+  });
+});
+
+describe("deployment health URL", () => {
+  const output = [
+    JSON.stringify({ type: "upload", targets: [] }),
+    "not json",
+    JSON.stringify({
+      type: "deploy",
+      targets: [
+        "https://illusions-stats-endpoint.illusions-lab.workers.dev",
+        "schedule: 0 2 * * *",
+      ],
+    }),
+  ].join("\n");
+
+  it("uses the workers.dev target from the last deploy record", () => {
+    expect(workersDevUrlFromOutput(output)).toBe(
+      "https://illusions-stats-endpoint.illusions-lab.workers.dev",
+    );
+  });
+
+  it("ignores an earlier deploy when the last one has no workers.dev URL", () => {
+    const replaced = `${output}\n${JSON.stringify({
+      type: "deploy",
+      targets: ["schedule: 0 2 * * *", "stats.example.com/* (custom domain)"],
+    })}`;
+    expect(() => workersDevUrlFromOutput(replaced)).toThrow(
+      "Deployment did not report a workers.dev URL.",
+    );
+  });
+
+  it("rejects addresses that are not the deployed workers.dev host", () => {
+    expect(() =>
+      workersDevUrlFromOutput(
+        JSON.stringify({
+          type: "deploy",
+          targets: [
+            "https://user:secret@name.example.workers.dev",
+            "https://name.example.workers.dev/healthz",
+            "https://name.example.workers.dev.evil.com",
+            "http://name.example.workers.dev",
+          ],
+        }),
+      ),
+    ).toThrow("Deployment did not report a workers.dev URL.");
   });
 });

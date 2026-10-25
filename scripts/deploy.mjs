@@ -1,10 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   applyResourceNames,
   resourceOverrides,
   wranglerCommand,
 } from "./bindings.mjs";
+import { checkHealth, workersDevUrlFromOutput } from "./health.mjs";
 import { parseJsonc } from "./jsonc.mjs";
 
 if (process.env.WORKERS_CI !== "1") {
@@ -27,6 +30,8 @@ const config = applyResourceNames(
 );
 const generated = ".wrangler-deploy.jsonc";
 writeFileSync(generated, `${JSON.stringify(config, null, 2)}\n`);
+const outputDir = mkdtempSync(join(tmpdir(), "aptabase-deploy-"));
+const outputPath = join(outputDir, "wrangler.jsonl");
 const bucket =
   target === "preview"
     ? config.previews?.r2_buckets?.[0]?.bucket_name
@@ -41,13 +46,29 @@ try {
   result = spawnSync(
     process.execPath,
     ["node_modules/wrangler/bin/wrangler.js", command, "--config", generated],
-    { stdio: "inherit", env: process.env },
+    {
+      stdio: "inherit",
+      env: { ...process.env, WRANGLER_OUTPUT_FILE_PATH: outputPath },
+    },
   );
 } finally {
   rmSync(generated, { force: true });
 }
 if (result?.error || result?.status !== 0) {
+  rmSync(outputDir, { recursive: true, force: true });
   throw new Error("Worker deployment failed.");
 }
 
-if (target !== "preview") await import("./health.mjs");
+if (target === "preview") {
+  rmSync(outputDir, { recursive: true, force: true });
+} else {
+  let reportedUrl;
+  try {
+    reportedUrl = workersDevUrlFromOutput(readFileSync(outputPath, "utf8"));
+  } catch {
+    throw new Error("Deployment did not report a workers.dev URL.");
+  } finally {
+    rmSync(outputDir, { recursive: true, force: true });
+  }
+  await checkHealth(reportedUrl);
+}
