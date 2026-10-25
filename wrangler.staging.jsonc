@@ -15,14 +15,15 @@
   "r2_buckets": [
     {
       "binding": "BACKUPS",
-      "bucket_name": "aptabase-events-staging"
+      "bucket_name": "aptabase-events"
     }
   ],
   "triggers": {
     "crons": ["0 2 * * *"]
   },
   "vars": {
-    "BACKUP_DATASET": "aptabase_events_v1_staging"
+    "BACKUP_DATASET": "aptabase_events_v1_staging",
+    "BACKUP_PREFIX": "staging"
   },
   "observability": {
     "enabled": true,

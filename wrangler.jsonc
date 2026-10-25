@@ -22,7 +22,8 @@
     "crons": ["0 2 * * *"]
   },
   "vars": {
-    "BACKUP_DATASET": "aptabase_events_v1"
+    "BACKUP_DATASET": "aptabase_events_v1",
+    "BACKUP_PREFIX": "production"
   },
   "observability": {
     "enabled": true,
@@ -35,11 +36,12 @@
     "r2_buckets": [
       {
         "binding": "BACKUPS",
-        "bucket_name": "aptabase-events-preview"
+        "bucket_name": "aptabase-events"
       }
     ],
     "vars": {
-      "BACKUP_DATASET": "aptabase_events_v1_preview"
+      "BACKUP_DATASET": "aptabase_events_v1_preview",
+      "BACKUP_PREFIX": "preview"
     },
     "analytics_engine_datasets": [
       {

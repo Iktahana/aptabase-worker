@@ -37,6 +37,7 @@ export interface BackupEnv {
   BACKUPS?: R2Bucket;
   ANALYTICS?: AnalyticsReader;
   BACKUP_DATASET?: string;
+  BACKUP_PREFIX?: string;
 }
 
 type Reason =
@@ -83,13 +84,22 @@ function datasetName(value: string | undefined): string | null {
   return value && /^[A-Za-z0-9_]+$/.test(value) ? value : null;
 }
 
-function keys(day: string): {
+function environmentPrefix(value: string | undefined): string | null {
+  return value === "production" || value === "staging" || value === "preview"
+    ? value
+    : null;
+}
+
+function keys(
+  environment: string,
+  day: string,
+): {
   events: string;
   complete: string;
   failed: string;
   lock: string;
 } {
-  const prefix = `events/day=${day}`;
+  const prefix = `${environment}/events/day=${day}`;
   return {
     events: `${prefix}/events.jsonl`,
     complete: `${prefix}/complete.json`,
@@ -123,11 +133,12 @@ async function marker(
 
 async function fail(
   bucket: R2Bucket,
+  environment: string,
   day: string,
   reason: Reason,
   now: number,
 ): Promise<void> {
-  const dayKeys = keys(day);
+  const dayKeys = keys(environment, day);
   await bucket.delete(dayKeys.events);
   await bucket.put(
     dayKeys.failed,
@@ -141,11 +152,12 @@ async function backupOne(
   bucket: R2Bucket,
   analytics: AnalyticsReader,
   dataset: string,
+  environment: string,
   day: string,
   now: number,
   rowLimit: number,
 ): Promise<Outcome> {
-  const dayKeys = keys(day);
+  const dayKeys = keys(environment, day);
   if (await bucket.head(dayKeys.complete)) {
     log(day, "complete", "", 0);
     return "skipped";
@@ -166,7 +178,7 @@ async function backupOne(
       params: dayBounds(day),
     });
   } catch {
-    await fail(bucket, day, "query_failed", now);
+    await fail(bucket, environment, day, "query_failed", now);
     return "failed";
   }
   const reason: Reason | null =
@@ -176,7 +188,7 @@ async function backupOne(
         ? "too_many_rows"
         : null;
   if (reason) {
-    await fail(bucket, day, reason, now);
+    await fail(bucket, environment, day, reason, now);
     return "failed";
   }
   try {
@@ -196,7 +208,7 @@ async function backupOne(
     log(day, "complete", "", read.data.length);
     return "complete";
   } catch {
-    await fail(bucket, day, "write_failed", now);
+    await fail(bucket, environment, day, "write_failed", now);
     return "failed";
   }
 }
@@ -208,7 +220,13 @@ export async function runBackup(
   rowLimit = ROW_LIMIT,
 ): Promise<void> {
   const dataset = datasetName(env.BACKUP_DATASET);
-  if (!dataset || !env.BACKUPS || typeof env.ANALYTICS?.query !== "function") {
+  const environment = environmentPrefix(env.BACKUP_PREFIX);
+  if (
+    !dataset ||
+    !environment ||
+    !env.BACKUPS ||
+    typeof env.ANALYTICS?.query !== "function"
+  ) {
     log("", "failed", "not_configured", 0);
     return;
   }
@@ -216,7 +234,7 @@ export async function runBackup(
   const analytics = env.ANALYTICS;
   const day = targetDay(scheduledTime);
   const prior = previousDay(day);
-  const priorKeys = keys(prior);
+  const priorKeys = keys(environment, prior);
   const priorComplete = await bucket.head(priorKeys.complete);
   const priorFailed = await bucket.head(priorKeys.failed);
   const priorLock = await marker(bucket, priorKeys.lock);
@@ -228,11 +246,12 @@ export async function runBackup(
       bucket,
       analytics,
       dataset,
+      environment,
       prior,
       now,
       rowLimit,
     );
     if (outcome === "failed") return;
   }
-  await backupOne(bucket, analytics, dataset, day, now, rowLimit);
+  await backupOne(bucket, analytics, dataset, environment, day, now, rowLimit);
 }

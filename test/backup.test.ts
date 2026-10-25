@@ -42,7 +42,12 @@ function analytics(mode: "ok" | "truncate" | "fail" | "many" = "ok") {
 }
 
 function bindings(source = analytics()) {
-  return { ...env, BACKUP_DATASET: "aptabase_events_v1", ANALYTICS: source };
+  return {
+    ...env,
+    BACKUP_DATASET: "aptabase_events_v1",
+    BACKUP_PREFIX: "production",
+    ANALYTICS: source,
+  };
 }
 
 async function reset(): Promise<void> {
@@ -80,7 +85,7 @@ describe("daily backup", () => {
     await reset();
     const source = analytics();
     await runBackup(bindings(source), AT, AT, 100);
-    expect(await text(`events/day=${DAY}/events.jsonl`)).toBe(
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toBe(
       `${JSON.stringify({
         timestamp: "2026-10-24T01:00:00.000Z",
         index1: "web-app",
@@ -113,10 +118,10 @@ describe("daily backup", () => {
     });
     await runBackup(bindings(analytics("truncate")), AT, AT, 100);
     expect(source.calls).toHaveLength(1);
-    expect(await env.BACKUPS.head(`events/day=${DAY}/complete.json`)).not.toBe(
-      null,
-    );
-    expect(await text(`events/day=${DAY}/events.jsonl`)).toContain(
+    expect(
+      await env.BACKUPS.head(`production/events/day=${DAY}/complete.json`),
+    ).not.toBe(null);
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toContain(
       '"blob18":"13"',
     );
   });
@@ -124,12 +129,14 @@ describe("daily backup", () => {
   it("does not store a partial object when the read is truncated or too large", async () => {
     await reset();
     await runBackup(bindings(analytics("truncate")), AT, AT, 100);
-    expect(await text(`events/day=${DAY}/events.jsonl`)).toBeNull();
-    expect(await text(`events/day=${DAY}/failed.json`)).toContain("truncated");
-    await env.BACKUPS.delete(`events/day=${DAY}/failed.json`);
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toBeNull();
+    expect(await text(`production/events/day=${DAY}/failed.json`)).toContain(
+      "truncated",
+    );
+    await env.BACKUPS.delete(`production/events/day=${DAY}/failed.json`);
     await runBackup(bindings(analytics("many")), AT, AT, 2);
-    expect(await text(`events/day=${DAY}/events.jsonl`)).toBeNull();
-    expect(await text(`events/day=${DAY}/failed.json`)).toContain(
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toBeNull();
+    expect(await text(`production/events/day=${DAY}/failed.json`)).toContain(
       "too_many_rows",
     );
   });
@@ -137,31 +144,31 @@ describe("daily backup", () => {
   it("retries only the adjacent failed day", async () => {
     await reset();
     await env.BACKUPS.put(
-      "events/day=2026-10-23/failed.json",
+      "production/events/day=2026-10-23/failed.json",
       JSON.stringify({ reason: "query_failed" }),
     );
     await env.BACKUPS.put(
-      "events/day=2026-10-22/failed.json",
+      "production/events/day=2026-10-22/failed.json",
       JSON.stringify({ reason: "query_failed" }),
     );
     const source = analytics();
     await runBackup(bindings(source), AT, AT, 100);
     expect(
-      await env.BACKUPS.head("events/day=2026-10-23/complete.json"),
+      await env.BACKUPS.head("production/events/day=2026-10-23/complete.json"),
     ).not.toBe(null);
-    expect(await env.BACKUPS.head("events/day=2026-10-22/complete.json")).toBe(
-      null,
-    );
-    expect(await env.BACKUPS.head(`events/day=${DAY}/complete.json`)).not.toBe(
-      null,
-    );
+    expect(
+      await env.BACKUPS.head("production/events/day=2026-10-22/complete.json"),
+    ).toBe(null);
+    expect(
+      await env.BACKUPS.head(`production/events/day=${DAY}/complete.json`),
+    ).not.toBe(null);
     expect(source.calls).toHaveLength(2);
   });
 
   it("leaves a fresh lock untouched and records a query failure", async () => {
     await reset();
     await env.BACKUPS.put(
-      `events/day=${DAY}/lock.json`,
+      `production/events/day=${DAY}/lock.json`,
       JSON.stringify({ startedAt: new Date(AT).toISOString() }),
     );
     const source = analytics();
@@ -169,10 +176,10 @@ describe("daily backup", () => {
     expect(source.calls).toHaveLength(0);
     await reset();
     await runBackup(bindings(analytics("fail")), AT, AT, 100);
-    expect(await text(`events/day=${DAY}/failed.json`)).toContain(
+    expect(await text(`production/events/day=${DAY}/failed.json`)).toContain(
       "query_failed",
     );
-    expect(await text(`events/day=${DAY}/events.jsonl`)).toBeNull();
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toBeNull();
   });
 
   it("does not let a missing dataset affect ingestion", async () => {
