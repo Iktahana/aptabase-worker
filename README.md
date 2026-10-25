@@ -94,7 +94,7 @@ For staging, connect a second Worker to a `staging` branch. Set its deploy comma
 
 ### Resource names
 
-The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files. To use different names without forking, add the build variables below on that Worker, in the same Builds settings as `WORKER_URL`. They are not runtime variables. Editing the R2 or dataset binding in the dashboard does not stick; the next deploy writes the build variable, or the default when the variable is unset.
+The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files. To use different names without forking, set the production deploy command to `node scripts/deploy.mjs production` and the build command to `npm run build`. Then add the build variables below on that Worker, in the same Builds settings as `WORKER_URL`. `npx wrangler deploy` ignores them. They are not runtime variables. Editing the R2 or dataset binding in the dashboard does not stick; the next deploy writes the build variable, or the default when the variable is unset.
 
 | Build variable           | Production default           | Staging default              |
 | ------------------------ | ---------------------------- | ---------------------------- |
@@ -102,9 +102,9 @@ The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files.
 | `EVENTS_DATASET`         | `aptabase_events_v1`         | `aptabase_events_v1_staging` |
 | `PREVIEW_EVENTS_DATASET` | `aptabase_events_v1_preview` | Not accepted                 |
 
-Production and its previews share `BACKUP_BUCKET`. Staging is a separate Worker. Set the same `BACKUP_BUCKET` there to keep all three environments in one bucket. Setting `PREVIEW_EVENTS_DATASET` on the staging deployment fails the deploy.
+Production and its previews share `BACKUP_BUCKET` only when the preview command is `node scripts/deploy.mjs preview`. The default `npx wrangler preview` reads the committed Wrangler file and keeps the default preview names. Staging is a separate Worker. Set the same `BACKUP_BUCKET` there to keep all three environments in one bucket. Setting `PREVIEW_EVENTS_DATASET` on the staging deployment fails the deploy. A production deploy prints only the production bucket and dataset. A preview build prints the preview bucket and dataset.
 
-A bucket name is 3–63 characters, uses lowercase letters, digits, and hyphens, and starts and ends with a letter or digit. A dataset name is 1–128 letters, digits, or underscores. An invalid value fails the deploy. Deploy creates a missing bucket. Objects and dataset points already stored under the previous names stay there. `npm run check` uses the names committed in the Wrangler files.
+A bucket name is 3–63 characters, uses lowercase letters, digits, and hyphens, and starts and ends with a letter or digit. A dataset name is 1–128 letters, digits, or underscores. An invalid value fails the deploy. A successful production deploy prints `Binding R2 bucket <name>`. Wrangler creates a bucket only when that name is not already bound. If creation fails, create the bucket in R2 before retrying. Objects and dataset points already stored under the previous names stay there. `npm run check` uses the names committed in the Wrangler files.
 
 ### Deployment behavior
 

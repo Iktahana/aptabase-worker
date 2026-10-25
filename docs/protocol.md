@@ -50,7 +50,7 @@ One event becomes one data point. The combined UTF-8 size of all encoded blobs m
 
 ## Frozen Analytics Engine columns
 
-The default production dataset is `aptabase_events_v1`. Staging defaults to `aptabase_events_v1_staging`, and Worker Previews default to `aptabase_events_v1_preview`. A deployment can bind other names with the Workers Builds variables `EVENTS_DATASET` and `PREVIEW_EVENTS_DATASET`. Local development uses the dataset name in the base Wrangler file, but Wrangler simulates the binding locally and does not write to the remote dataset.
+The default production dataset is `aptabase_events_v1`. Staging defaults to `aptabase_events_v1_staging`, and Worker Previews default to `aptabase_events_v1_preview`. A deployment can bind other names with the Workers Builds variables `EVENTS_DATASET` and `PREVIEW_EVENTS_DATASET`. Preview names take effect when the preview command is `node scripts/deploy.mjs preview`. Local development uses the dataset name in the base Wrangler file, but Wrangler simulates the binding locally and does not write to the remote dataset.
 
 | Column    | Value                                                                                              |
 | --------- | -------------------------------------------------------------------------------------------------- |

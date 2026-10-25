@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyResourceNames, resourceOverrides } from "../scripts/bindings.mjs";
+import {
+  applyResourceNames,
+  resourceOverrides,
+  wranglerCommand,
+} from "../scripts/bindings.mjs";
+import { parseJsonc } from "../scripts/jsonc.mjs";
 
 function config() {
   return {
@@ -54,6 +59,41 @@ describe("deployment resource names", () => {
     );
     expect(next.previews.vars.BACKUP_DATASET).toBe("events_preview");
     expect(next.previews.vars.BACKUP_PREFIX).toBe("preview");
+  });
+
+  it("sends preview names to wrangler preview and accepts JSONC", () => {
+    expect(wranglerCommand("preview")).toBe("preview");
+    expect(wranglerCommand("production")).toBe("deploy");
+    const source = parseJsonc(`{
+      // Preview names are published by wrangler preview, not wrangler deploy.
+      "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "aptabase-events", }],
+      "analytics_engine_datasets": [
+        { "binding": "EVENTS", "dataset": "aptabase_events_v1" }
+      ],
+      "vars": { "BACKUP_DATASET": "aptabase_events_v1" },
+      "previews": {
+        "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "aptabase-events" }],
+        "analytics_engine_datasets": [
+          { "binding": "EVENTS", "dataset": "aptabase_events_v1_preview" }
+        ],
+        "vars": { "BACKUP_DATASET": "aptabase_events_v1_preview" }
+      }
+    }`) as ReturnType<typeof config>;
+    const next = applyResourceNames(
+      source,
+      resourceOverrides(
+        {
+          BACKUP_BUCKET: "my-events",
+          PREVIEW_EVENTS_DATASET: "events_preview",
+        },
+        true,
+      ),
+    );
+    expect(next.previews.r2_buckets[0]?.bucket_name).toBe("my-events");
+    expect(next.previews.analytics_engine_datasets[0]?.dataset).toBe(
+      "events_preview",
+    );
+    expect(next.previews.vars.BACKUP_DATASET).toBe("events_preview");
   });
 
   it("rejects invalid names and a preview dataset on staging", () => {

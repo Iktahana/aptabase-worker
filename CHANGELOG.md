@@ -4,7 +4,9 @@
 
 - Copy each closed UTC day from Analytics Engine into an R2 bucket. Retry only the adjacent failed day. A failed retry does not skip the day that just closed.
 
-- Let Workers Builds variables `BACKUP_BUCKET`, `EVENTS_DATASET`, and `PREVIEW_EVENTS_DATASET` select the R2 bucket and Analytics Engine datasets.
+- Let Workers Builds variables `BACKUP_BUCKET`, `EVENTS_DATASET`, and `PREVIEW_EVENTS_DATASET` select the R2 bucket and Analytics Engine datasets. Preview names are applied by `node scripts/deploy.mjs preview`.
+
+- Keep copying the closed UTC day when the adjacent retry throws before it can record a failure.
 
 - Normalize Cloudflare country and region fields, store the region code in `blob18`, and rate-limit IPv6 by `/64`. Reject missing or unparseable client IPs when the IP limit is enabled.
 

@@ -165,6 +165,43 @@ describe("daily backup", () => {
     expect(source.calls).toHaveLength(2);
   });
 
+  it("backs up the closed day when the adjacent retry cannot write its lock", async () => {
+    await reset();
+    await env.BACKUPS.put(
+      "production/events/day=2026-10-23/failed.json",
+      JSON.stringify({ reason: "query_failed" }),
+    );
+    const source = analytics();
+    const backups = new Proxy(env.BACKUPS, {
+      get(target, property, receiver) {
+        if (property === "put") {
+          return (key: string, ...args: unknown[]) => {
+            if (key === "production/events/day=2026-10-23/lock.json") {
+              throw new Error("r2 unavailable");
+            }
+            return Reflect.apply(
+              Reflect.get(target, property, receiver) as (
+                ...values: unknown[]
+              ) => unknown,
+              target,
+              [key, ...args],
+            );
+          };
+        }
+        const value = Reflect.get(target, property, receiver) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await runBackup({ ...bindings(source), BACKUPS: backups }, AT, AT, 100);
+    expect(source.calls).toHaveLength(1);
+    expect(
+      await env.BACKUPS.head(`production/events/day=${DAY}/complete.json`),
+    ).not.toBe(null);
+    expect(await text("production/events/day=2026-10-23/events.jsonl")).toBe(
+      null,
+    );
+  });
+
   it("backs up the closed day when the adjacent retry fails", async () => {
     await reset();
     await env.BACKUPS.put(

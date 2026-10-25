@@ -242,15 +242,19 @@ export async function runBackup(
     priorLock?.startedAt && now - Date.parse(priorLock.startedAt) >= STALE_MS,
   );
   if (!priorComplete && (priorFailed || interrupted)) {
-    await backupOne(
-      bucket,
-      analytics,
-      dataset,
-      environment,
-      prior,
-      now,
-      rowLimit,
-    );
+    try {
+      await backupOne(
+        bucket,
+        analytics,
+        dataset,
+        environment,
+        prior,
+        now,
+        rowLimit,
+      );
+    } catch {
+      log(prior, "failed", "write_failed", 0);
+    }
   }
   await backupOne(bucket, analytics, dataset, environment, day, now, rowLimit);
 }

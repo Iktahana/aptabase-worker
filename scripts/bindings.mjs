@@ -34,6 +34,14 @@ function rename(list, field, key, value) {
   return found;
 }
 
+export function wranglerCommand(target) {
+  if (target === "preview") return "preview";
+  if (target === "production" || target === "staging") return "deploy";
+  throw new Error(
+    "Choose the staging, production, or preview deployment target.",
+  );
+}
+
 export function applyResourceNames(config, overrides) {
   const next = structuredClone(config);
   if (overrides.bucket) {

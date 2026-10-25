@@ -220,7 +220,7 @@ export default {
   async scheduled(controller, env): Promise<void> {
     try {
       await runBackup(env, controller.scheduledTime);
-    } catch {
+    } catch (error) {
       console.log(
         JSON.stringify({
           type: "backup",
@@ -230,6 +230,7 @@ export default {
           rows: 0,
         }),
       );
+      throw error;
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -13,3 +13,7 @@ export function applyResourceNames<T>(
   config: T,
   overrides: ResourceOverrides,
 ): T;
+
+export function wranglerCommand(
+  target: string | undefined,
+): "deploy" | "preview";
