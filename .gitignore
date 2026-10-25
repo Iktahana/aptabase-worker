@@ -154,3 +154,6 @@ vite.config.ts.timestamp-*
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+# Private ClickHouse archive import. Not part of the Worker.
+scripts/private/
