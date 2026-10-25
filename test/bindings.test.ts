@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { applyResourceNames, resourceOverrides } from "../scripts/bindings.mjs";
+
+function config() {
+  return {
+    r2_buckets: [{ binding: "BACKUPS", bucket_name: "aptabase-events" }],
+    analytics_engine_datasets: [
+      { binding: "EVENTS", dataset: "aptabase_events_v1" },
+    ],
+    vars: {
+      BACKUP_DATASET: "aptabase_events_v1",
+      BACKUP_PREFIX: "production",
+    },
+    previews: {
+      r2_buckets: [{ binding: "BACKUPS", bucket_name: "aptabase-events" }],
+      analytics_engine_datasets: [
+        { binding: "EVENTS", dataset: "aptabase_events_v1_preview" },
+      ],
+      vars: {
+        BACKUP_DATASET: "aptabase_events_v1_preview",
+        BACKUP_PREFIX: "preview",
+      },
+    },
+  };
+}
+
+describe("deployment resource names", () => {
+  it("keeps the committed names when build variables are absent", () => {
+    const source = config();
+    const next = applyResourceNames(source, resourceOverrides({}, true));
+    expect(next).toEqual(source);
+    expect(source.vars.BACKUP_DATASET).toBe("aptabase_events_v1");
+  });
+
+  it("replaces the shared bucket and each dataset from its own variable", () => {
+    const next = applyResourceNames(
+      config(),
+      resourceOverrides(
+        {
+          BACKUP_BUCKET: "my-events",
+          EVENTS_DATASET: "events_prod",
+          PREVIEW_EVENTS_DATASET: "events_preview",
+        },
+        true,
+      ),
+    );
+    expect(next.r2_buckets[0]?.bucket_name).toBe("my-events");
+    expect(next.previews.r2_buckets[0]?.bucket_name).toBe("my-events");
+    expect(next.analytics_engine_datasets[0]?.dataset).toBe("events_prod");
+    expect(next.vars.BACKUP_DATASET).toBe("events_prod");
+    expect(next.vars.BACKUP_PREFIX).toBe("production");
+    expect(next.previews.analytics_engine_datasets[0]?.dataset).toBe(
+      "events_preview",
+    );
+    expect(next.previews.vars.BACKUP_DATASET).toBe("events_preview");
+    expect(next.previews.vars.BACKUP_PREFIX).toBe("preview");
+  });
+
+  it("rejects invalid names and a preview dataset on staging", () => {
+    expect(() =>
+      resourceOverrides({ BACKUP_BUCKET: "Bad_Name" }, true),
+    ).toThrow("BACKUP_BUCKET is invalid.");
+    expect(() =>
+      resourceOverrides({ EVENTS_DATASET: "events-prod" }, true),
+    ).toThrow("EVENTS_DATASET is invalid.");
+    expect(() =>
+      resourceOverrides({ PREVIEW_EVENTS_DATASET: "events_preview" }, false),
+    ).toThrow("PREVIEW_EVENTS_DATASET applies only to the production");
+  });
+});

@@ -90,7 +90,21 @@ To pause an app, add `"disabled": true` to its entry in `APPS`. This blocks ever
 
 Preview builds use a separate Analytics Engine dataset and isolated Durable Object counters. To accept events on preview URLs, add the `APPS` variable to **Previews Base** in Cloudflare; production variables are not inherited. Optional limit overrides can be set there too.
 
-For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging`, add its `APPS` runtime variable, and set its `WORKER_URL` build variable to the staging URL. The configuration in `wrangler.staging.jsonc` uses the `aptabase_events_v1_staging` dataset.
+For staging, connect a second Worker to a `staging` branch. Set its deploy command to `node scripts/deploy.mjs staging`, add its `APPS` runtime variable, and set its `WORKER_URL` build variable to the staging URL. Its default dataset is `aptabase_events_v1_staging`.
+
+### Resource names
+
+The R2 bucket and Analytics Engine datasets have defaults in the Wrangler files. To use different names without forking, add the build variables below on that Worker, in the same Builds settings as `WORKER_URL`. They are not runtime variables. Editing the R2 or dataset binding in the dashboard does not stick; the next deploy writes the build variable, or the default when the variable is unset.
+
+| Build variable           | Production default           | Staging default              |
+| ------------------------ | ---------------------------- | ---------------------------- |
+| `BACKUP_BUCKET`          | `aptabase-events`            | `aptabase-events`            |
+| `EVENTS_DATASET`         | `aptabase_events_v1`         | `aptabase_events_v1_staging` |
+| `PREVIEW_EVENTS_DATASET` | `aptabase_events_v1_preview` | Not accepted                 |
+
+Production and its previews share `BACKUP_BUCKET`. Staging is a separate Worker. Set the same `BACKUP_BUCKET` there to keep all three environments in one bucket. Setting `PREVIEW_EVENTS_DATASET` on the staging deployment fails the deploy.
+
+A bucket name is 3–63 characters, uses lowercase letters, digits, and hyphens, and starts and ends with a letter or digit. A dataset name is 1–128 letters, digits, or underscores. An invalid value fails the deploy. Deploy creates a missing bucket. Objects and dataset points already stored under the previous names stay there. `npm run check` uses the names committed in the Wrangler files.
 
 ### Deployment behavior
 

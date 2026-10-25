@@ -150,6 +150,7 @@ vite.config.ts.timestamp-*
 
 # Worker local state and secrets
 .wrangler/
+.wrangler-deploy.jsonc
 .dev.vars
 .dev.vars.*
 !.dev.vars.example

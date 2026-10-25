@@ -4,6 +4,8 @@
 
 - Copy each closed UTC day from Analytics Engine into an R2 bucket. Retry only the adjacent failed day. A failed retry does not skip the day that just closed.
 
+- Let Workers Builds variables `BACKUP_BUCKET`, `EVENTS_DATASET`, and `PREVIEW_EVENTS_DATASET` select the R2 bucket and Analytics Engine datasets.
+
 - Normalize Cloudflare country and region fields, store the region code in `blob18`, and rate-limit IPv6 by `/64`. Reject missing or unparseable client IPs when the IP limit is enabled.
 
 - Pin `undici` 7.30.1 and `zod` 4.6.7 so the release audit passes.
