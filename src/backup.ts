@@ -242,7 +242,7 @@ export async function runBackup(
     priorLock?.startedAt && now - Date.parse(priorLock.startedAt) >= STALE_MS,
   );
   if (!priorComplete && (priorFailed || interrupted)) {
-    const outcome = await backupOne(
+    await backupOne(
       bucket,
       analytics,
       dataset,
@@ -251,7 +251,6 @@ export async function runBackup(
       now,
       rowLimit,
     );
-    if (outcome === "failed") return;
   }
   await backupOne(bucket, analytics, dataset, environment, day, now, rowLimit);
 }

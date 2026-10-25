@@ -15,7 +15,7 @@ Event POSTs use `Content-Type: application/json` and `App-Key`. Browser OPTIONS 
 
 ## Optional WAF path/method rule
 
-Use a dedicated proxied custom hostname in your own Cloudflare zone, such as `stats.example.com`. Your zone's WAF rules do not cover the existing `*.workers.dev` hostname. Configure and verify the custom hostname first, update all SDK hosts, then disable the production workers.dev route and unused preview/version endpoints as appropriate. Do not disable the current host while clients still use it. Persist routing changes in Wrangler and deploy through CI. See [Workers routing](https://developers.cloudflare.com/workers/configuration/routing/) and [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
+Use a dedicated proxied custom hostname in your own Cloudflare zone, such as `stats.example.com`. Your zone's WAF rules do not cover the existing `*.workers.dev` hostname. Configure and verify the custom hostname first, update all SDK hosts, then disable the production workers.dev route and unused preview/version endpoints as appropriate. Do not disable the current host while clients still use it. Persist routing changes in Wrangler and deploy through Cloudflare Workers Builds. See [Workers routing](https://developers.cloudflare.com/workers/configuration/routing/) and [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
 In that domain's Security rules, create a custom rule with action **Block** and this expression, replacing the example hostname:
 

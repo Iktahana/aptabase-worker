@@ -165,6 +165,55 @@ describe("daily backup", () => {
     expect(source.calls).toHaveLength(2);
   });
 
+  it("backs up the closed day when the adjacent retry fails", async () => {
+    await reset();
+    await env.BACKUPS.put(
+      "production/events/day=2026-10-23/failed.json",
+      JSON.stringify({ reason: "query_failed" }),
+    );
+    const source = analytics();
+    source.query = async (request) => {
+      source.calls.push(request);
+      if (source.calls.length === 1) throw new Error("unavailable");
+      return result([row(0)]);
+    };
+    await runBackup(bindings(source), AT, AT, 100);
+    expect(source.calls).toHaveLength(2);
+    expect(await text("production/events/day=2026-10-23/events.jsonl")).toBe(
+      null,
+    );
+    expect(
+      await text("production/events/day=2026-10-23/failed.json"),
+    ).toContain("query_failed");
+    expect(
+      await env.BACKUPS.head(`production/events/day=${DAY}/complete.json`),
+    ).not.toBe(null);
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toContain(
+      '"blob18":"13"',
+    );
+  });
+
+  it("records both days when the retry and the closed day fail", async () => {
+    await reset();
+    await env.BACKUPS.put(
+      "production/events/day=2026-10-23/failed.json",
+      JSON.stringify({ reason: "query_failed" }),
+    );
+    const source = analytics("fail");
+    await runBackup(bindings(source), AT, AT, 100);
+    expect(source.calls).toHaveLength(2);
+    expect(await text("production/events/day=2026-10-23/events.jsonl")).toBe(
+      null,
+    );
+    expect(
+      await text("production/events/day=2026-10-23/failed.json"),
+    ).toContain("query_failed");
+    expect(await text(`production/events/day=${DAY}/events.jsonl`)).toBeNull();
+    expect(await text(`production/events/day=${DAY}/failed.json`)).toContain(
+      "query_failed",
+    );
+  });
+
   it("leaves a fresh lock untouched and records a query failure", async () => {
     await reset();
     await env.BACKUPS.put(
