@@ -9,6 +9,21 @@
       "dataset": "aptabase_events_v1_staging"
     }
   ],
+  "analytics": {
+    "binding": "ANALYTICS"
+  },
+  "r2_buckets": [
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "aptabase-events-staging"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
+  "vars": {
+    "BACKUP_DATASET": "aptabase_events_v1_staging"
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1

@@ -9,11 +9,38 @@
       "dataset": "aptabase_events_v1"
     }
   ],
+  "analytics": {
+    "binding": "ANALYTICS"
+  },
+  "r2_buckets": [
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "aptabase-events"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
+  "vars": {
+    "BACKUP_DATASET": "aptabase_events_v1"
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1
   },
   "previews": {
+    "analytics": {
+      "binding": "ANALYTICS"
+    },
+    "r2_buckets": [
+      {
+        "binding": "BACKUPS",
+        "bucket_name": "aptabase-events-preview"
+      }
+    ],
+    "vars": {
+      "BACKUP_DATASET": "aptabase_events_v1_preview"
+    },
     "analytics_engine_datasets": [
       {
         "binding": "EVENTS",

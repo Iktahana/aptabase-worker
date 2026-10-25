@@ -1,4 +1,5 @@
 import { encode, trustedLocation, write } from "./analytics";
+import { runBackup } from "./backup";
 import { bodyLimit, parseApps, protectionLimit } from "./config";
 import { normalize } from "./event";
 import { ipGuardName } from "./guard";
@@ -215,5 +216,20 @@ export default {
     submitted = write(env.EVENTS, points);
     if (submitted !== points.length) return response(503, "write_failed");
     return response(200);
+  },
+  async scheduled(controller, env): Promise<void> {
+    try {
+      await runBackup(env, controller.scheduledTime);
+    } catch {
+      console.log(
+        JSON.stringify({
+          type: "backup",
+          day: "",
+          status: "failed",
+          reason: "write_failed",
+          rows: 0,
+        }),
+      );
+    }
   },
 } satisfies ExportedHandler<Env>;

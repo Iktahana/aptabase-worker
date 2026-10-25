@@ -81,7 +81,7 @@ Client and reception timestamps serve different purposes; select the appropriate
 
 `blob14` keeps Cloudflare's `XX` and uses `T1` for Tor. Empty `blob14`, `blob15`, or `blob18` means the value was missing or rejected. Rows written before region codes were stored also have an empty `blob18`. These columns estimate the egress IP's location. Do not fill gaps from `blob5`, which is the client locale. Aggregate counts with `sum(_sample_interval)`. Group countries by `blob14`, leaving `T1` and empty values separate. Group regions by `blob14` and `blob18`, using `blob15` only as a label, and show regions inside one country. City, postal code, and coordinates are not stored.
 
-Future daily archives should use UTC date partitions, repeatable jobs, and processing checkpoints. Recovering complete raw events from sampled AE results is impossible; full raw archives require an additional durable ingestion path. No archival or query endpoint is included in v1.
+At 02:00 UTC a scheduled job copies the single UTC day that has already closed into R2. The window is the half-open range `[00:00:00, next 00:00:00)` on Analytics Engine `timestamp`. The object `events/day=YYYY-MM-DD/events.jsonl` contains one JSON record per stored point, including `blob1` through `blob18`, both doubles, and `_sample_interval`. A `complete.json` marker is written only after the whole result is stored. A truncated or oversized read deletes any partial object and records `failed.json` instead. The next run retries that adjacent failed or interrupted day and does not scan further back. Sampled points cannot be reconstructed into the original accepted requests. There is no query endpoint.
 
 ## Abuse protection
 
