@@ -171,6 +171,128 @@ curl http://localhost:8787/api/v0/event \
 
 This project provides event ingestion. To view event reports, query Analytics Engine or connect your own dashboard. Cloudflare Worker metrics show service operation rather than Aptabase event charts.
 
+### Analytics Engine SQL examples
+
+Run these queries against the production dataset `aptabase_events_v1` in Cloudflare's Analytics Engine SQL interface. Replace the dataset name for staging or preview. Analytics Engine samples data, so use `sum(_sample_interval)` for event counts. Session counts below use `uniq(blob4)` and are estimates of sessions, not distinct people: this Worker does not store a stable user ID. Exclude debug events with `double2 = 0`.
+
+Column map: `blob2` is the stable app ID, `blob3` the event name, `blob4` the opaque session ID, `blob6` the OS name, `blob14` the Cloudflare-derived country, `blob9` the app version, and `double2` the debug flag. See [the full frozen column map](docs/protocol.md#frozen-analytics-engine-columns).
+
+#### Daily sessions and events
+
+```sql
+SELECT toDate(timestamp) AS day,
+       sum(_sample_interval) AS events,
+       uniq(blob4) AS sessions
+FROM aptabase_events_v1
+WHERE blob4 != '' AND double2 = 0
+GROUP BY day
+ORDER BY day DESC
+LIMIT 30
+```
+
+#### Daily sessions by app
+
+```sql
+SELECT toDate(timestamp) AS day,
+       blob2 AS app_id,
+       uniq(blob4) AS sessions,
+       sum(_sample_interval) AS events
+FROM aptabase_events_v1
+WHERE blob4 != '' AND double2 = 0
+GROUP BY day, app_id
+ORDER BY day DESC, sessions DESC
+LIMIT 100
+```
+
+#### Platform share by sampled event count
+
+```sql
+SELECT if(blob6 = '', '(unknown)', blob6) AS platform,
+       sum(_sample_interval) AS events,
+       round(100.0 * events / sum(events) OVER (), 1) AS share_percent
+FROM aptabase_events_v1
+WHERE double2 = 0
+GROUP BY platform
+ORDER BY events DESC
+```
+
+#### Platform sessions
+
+```sql
+SELECT if(blob6 = '', '(unknown)', blob6) AS platform,
+       uniq(blob4) AS sessions
+FROM aptabase_events_v1
+WHERE blob4 != '' AND double2 = 0
+GROUP BY platform
+ORDER BY sessions DESC
+```
+
+#### Country distribution
+
+```sql
+SELECT if(blob14 = '', '(unknown)', blob14) AS country,
+       sum(_sample_interval) AS events,
+       uniq(blob4) AS sessions
+FROM aptabase_events_v1
+WHERE double2 = 0
+GROUP BY country
+ORDER BY events DESC
+LIMIT 50
+```
+
+Country and region values are inferred by Cloudflare from the request's egress IP, not from the client's locale. `T1` and `XX` are Cloudflare country codes; empty values are missing or rejected. See [geography field notes](docs/protocol.md#frozen-analytics-engine-columns).
+
+#### Most common events
+
+```sql
+SELECT blob3 AS event_name,
+       sum(_sample_interval) AS events,
+       uniq(blob4) AS sessions
+FROM aptabase_events_v1
+WHERE double2 = 0
+GROUP BY event_name
+ORDER BY events DESC
+LIMIT 50
+```
+
+#### Active apps per day
+
+```sql
+SELECT toDate(timestamp) AS day,
+       uniq(blob2) AS active_apps,
+       sum(_sample_interval) AS events
+FROM aptabase_events_v1
+WHERE double2 = 0
+GROUP BY day
+ORDER BY day DESC
+LIMIT 30
+```
+
+#### App version distribution
+
+```sql
+SELECT blob2 AS app_id,
+       if(blob9 = '', '(unknown)', blob9) AS app_version,
+       sum(_sample_interval) AS events
+FROM aptabase_events_v1
+WHERE double2 = 0
+GROUP BY app_id, app_version
+ORDER BY events DESC
+LIMIT 100
+```
+
+#### Suggested dashboard pages
+
+- **Overview:** daily sampled event counts, daily sessions, and active apps.
+- **Users and retention:** daily or weekly sessions and returning sessions. Session IDs are only a proxy; there is no stable user ID.
+- **Platforms and devices:** OS, device model, OS version, and client locale shares.
+- **Events:** top event names and trends, filterable by app and platform.
+- **Geography:** country distribution and regions within a selected country.
+- **Versions:** app and SDK version distribution and upgrade trends.
+- **Data quality:** debug share and missing session, OS, or locale rates.
+
+Analytics Engine SQL support can vary by interface; if a function such as `toDate`, `uniq`, or window aggregation is rejected, adapt it to the functions supported by the current SQL interface. These reports are sampled and are not a lossless event archive.
+
 Successful ingestion returns `200 {}` when valid data points have been submitted to the binding. An empty batch or a batch whose entries are all invalid also returns `200 {}` and does not write to Analytics Engine. Analytics Engine writes are non-blocking and provide no persistence acknowledgment; see [Cloudflare's write example](https://developers.cloudflare.com/workers/examples/analytics-engine/). A synchronous binding error returns 503; a partial batch write can cause duplicates if clients retry. There is no deduplication or durable queue.
 
 Analytics Engine samples data and retains it for **three months**, per its [limits](https://developers.cloudflare.com/analytics/analytics-engine/limits/). Sampling is grouped by stable app ID. Use sampling-aware SQL for aggregates. Do not treat this service as a lossless event archive. At 02:00 UTC the Worker copies the previous closed UTC day from Analytics Engine into the bound R2 bucket. The object is valid only when the matching `complete.json` marker exists. See [protocol and data layout](docs/protocol.md), [privacy](docs/privacy.md), and [release verification and rollback](docs/verification.md).
