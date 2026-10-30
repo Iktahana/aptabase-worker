@@ -173,16 +173,16 @@ This project provides event ingestion. To view event reports, query Analytics En
 
 ### Analytics Engine SQL examples
 
-Run these queries against the production dataset `aptabase_events_v1` in Cloudflare's Analytics Engine SQL interface. Replace the dataset name for staging or preview. Analytics Engine samples data, so use `sum(_sample_interval)` for event counts. Session counts below use `uniq(blob4)` and are estimates of sessions, not distinct people: this Worker does not store a stable user ID. Exclude debug events with `double2 = 0`.
+Run these queries against the production dataset `aptabase_events_v1` in Cloudflare's Analytics Engine SQL interface. Replace the dataset name for staging or preview. Analytics Engine samples data, so use `sum(_sample_interval)` for event counts. Session counts below use `count(DISTINCT blob4)` and are estimates of sessions, not distinct people: this Worker does not store a stable user ID. Exclude debug events with `double2 = 0`.
 
 Column map: `blob2` is the stable app ID, `blob3` the event name, `blob4` the opaque session ID, `blob6` the OS name, `blob14` the Cloudflare-derived country, `blob9` the app version, and `double2` the debug flag. See [the full frozen column map](docs/protocol.md#frozen-analytics-engine-columns).
 
 #### Daily sessions and events
 
 ```sql
-SELECT toDate(timestamp) AS day,
+SELECT formatDateTime(timestamp, '%Y-%m-%d') AS day,
        sum(_sample_interval) AS events,
-       uniq(blob4) AS sessions
+       count(DISTINCT blob4) AS sessions
 FROM aptabase_events_v1
 WHERE blob4 != '' AND double2 = 0
 GROUP BY day
@@ -193,9 +193,9 @@ LIMIT 30
 #### Daily sessions by app
 
 ```sql
-SELECT toDate(timestamp) AS day,
+SELECT formatDateTime(timestamp, '%Y-%m-%d') AS day,
        blob2 AS app_id,
-       uniq(blob4) AS sessions,
+       count(DISTINCT blob4) AS sessions,
        sum(_sample_interval) AS events
 FROM aptabase_events_v1
 WHERE blob4 != '' AND double2 = 0
@@ -208,19 +208,20 @@ LIMIT 100
 
 ```sql
 SELECT if(blob6 = '', '(unknown)', blob6) AS platform,
-       sum(_sample_interval) AS events,
-       round(100.0 * events / sum(events) OVER (), 1) AS share_percent
+       sum(_sample_interval) AS events
 FROM aptabase_events_v1
 WHERE double2 = 0
 GROUP BY platform
 ORDER BY events DESC
 ```
 
+Analytics Engine SQL does not support window functions such as `sum(events) OVER ()`. Compute the share by dividing each platform's `events` by the overall sampled total from `SELECT sum(_sample_interval) AS events FROM aptabase_events_v1 WHERE double2 = 0`.
+
 #### Platform sessions
 
 ```sql
 SELECT if(blob6 = '', '(unknown)', blob6) AS platform,
-       uniq(blob4) AS sessions
+       count(DISTINCT blob4) AS sessions
 FROM aptabase_events_v1
 WHERE blob4 != '' AND double2 = 0
 GROUP BY platform
@@ -232,7 +233,7 @@ ORDER BY sessions DESC
 ```sql
 SELECT if(blob14 = '', '(unknown)', blob14) AS country,
        sum(_sample_interval) AS events,
-       uniq(blob4) AS sessions
+       count(DISTINCT blob4) AS sessions
 FROM aptabase_events_v1
 WHERE double2 = 0
 GROUP BY country
@@ -247,7 +248,7 @@ Country and region values are inferred by Cloudflare from the request's egress I
 ```sql
 SELECT blob3 AS event_name,
        sum(_sample_interval) AS events,
-       uniq(blob4) AS sessions
+       count(DISTINCT blob4) AS sessions
 FROM aptabase_events_v1
 WHERE double2 = 0
 GROUP BY event_name
@@ -258,8 +259,8 @@ LIMIT 50
 #### Active apps per day
 
 ```sql
-SELECT toDate(timestamp) AS day,
-       uniq(blob2) AS active_apps,
+SELECT formatDateTime(timestamp, '%Y-%m-%d') AS day,
+       count(DISTINCT blob2) AS active_apps,
        sum(_sample_interval) AS events
 FROM aptabase_events_v1
 WHERE double2 = 0
@@ -291,7 +292,7 @@ LIMIT 100
 - **Versions:** app and SDK version distribution and upgrade trends.
 - **Data quality:** debug share and missing session, OS, or locale rates.
 
-Analytics Engine SQL support can vary by interface; if a function such as `toDate`, `uniq`, or window aggregation is rejected, adapt it to the functions supported by the current SQL interface. These reports are sampled and are not a lossless event archive.
+These queries use only functions documented in Cloudflare's [Analytics Engine SQL reference](https://developers.cloudflare.com/analytics/analytics-engine/sql-reference/); the dialect has no `uniq`, `toDate`, or window functions. If an interface still rejects a query, adapt it to that interface's supported functions. These reports are sampled and are not a lossless event archive.
 
 Successful ingestion returns `200 {}` when valid data points have been submitted to the binding. An empty batch or a batch whose entries are all invalid also returns `200 {}` and does not write to Analytics Engine. Analytics Engine writes are non-blocking and provide no persistence acknowledgment; see [Cloudflare's write example](https://developers.cloudflare.com/workers/examples/analytics-engine/). A synchronous binding error returns 503; a partial batch write can cause duplicates if clients retry. There is no deduplication or durable queue.
 
