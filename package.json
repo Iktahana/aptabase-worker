@@ -25,11 +25,11 @@
   },
   "homepage": "https://github.com/Iktahana/aptabase-worker#readme",
   "devDependencies": {
-    "@biomejs/biome": "^2.6.2",
-    "@cloudflare/vitest-plugin": "^1.4.7",
-    "@types/node": "^26.6.5",
+    "@biomejs/biome": "^2.6.5",
+    "@cloudflare/vitest-plugin": "^1.6.0",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "wrangler": "^4.152.0"
   },
   "overrides": {
