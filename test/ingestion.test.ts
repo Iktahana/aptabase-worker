@@ -761,7 +761,6 @@ describe("dashboard configuration", () => {
   it("uses safe defaults when optional runtime variables are absent", async () => {
     expect(bodyLimit(undefined)).toBe(524288);
     expect(protectionLimit(undefined, 20)).toBe(20);
-    expect(protectionLimit(undefined, 20000)).toBe(20000);
     const { bindings, writeDataPoint } = setup();
     for (const key of [
       "MAX_BODY_BYTES",
@@ -769,11 +768,18 @@ describe("dashboard configuration", () => {
       "MONTHLY_EVENT_LIMIT",
     ])
       Reflect.deleteProperty(bindings, key);
+    const getByName = vi.fn(() => ({
+      request: async () => true,
+    }));
+    Reflect.set(bindings, "INGESTION_GUARD", { getByName });
     const response = await worker.fetch(
       request(web, undefined, { "CF-Connecting-IP": "198.51.100.20" }),
       bindings,
     );
     expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/^ip:/),
+    );
     expect(writeDataPoint).toHaveBeenCalledTimes(1);
   });
 });

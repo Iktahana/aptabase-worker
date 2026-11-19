@@ -51,7 +51,7 @@ Future pushes to `main` deploy automatically through Cloudflare Workers Builds.
 
 ## Configuration
 
-The defaults allow **20 requests per IP per second** and **20,000 events per app per month**. The following settings are optional.
+By default, the Worker allows **20 requests per IP per second** and the monthly event quota is disabled.
 
 Manage runtime settings in the Cloudflare dashboard. `keep_vars: true` preserves them across CI deployments; Wrangler manages resource bindings and migrations. `APPS` may be a regular variable or a Secret. Existing secrets continue to work. Runtime settings are independent of Git rollbacks.
 
@@ -73,12 +73,12 @@ Omitting `origins` permits any Origin (`Access-Control-Allow-Origin: *`). A conf
 
 ### Abuse protection
 
-Defaults match Aptabase’s ingestion rate and free monthly allowance:
+The Worker supports the following limits:
 
 | Variable                | Default | Scope                                                                             |
 | ----------------------- | ------- | --------------------------------------------------------------------------------- |
 | `RATE_LIMIT_PER_SECOND` | `20`    | Requests per IP per fixed one-second window, across apps and both event endpoints |
-| `MONTHLY_EVENT_LIMIT`   | `20000` | Valid events per stable app ID per UTC calendar month                             |
+| `MONTHLY_EVENT_LIMIT`   | `0`     | Valid events per stable app ID per UTC calendar month when enabled                |
 
 To change a limit, add or edit its variable in **Settings → Runtime variables and secrets → Production**. Set it to `0` to disable that protection. Omitted values use the defaults above. `MAX_BODY_BYTES` optionally lowers the body limit from `524288` bytes (512 KiB). Invalid settings return 503.
 

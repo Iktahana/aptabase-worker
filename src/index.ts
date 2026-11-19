@@ -106,7 +106,7 @@ export default {
     try {
       limit = bodyLimit(env.MAX_BODY_BYTES);
       rateLimit = protectionLimit(env.RATE_LIMIT_PER_SECOND, 20);
-      monthlyLimit = protectionLimit(env.MONTHLY_EVENT_LIMIT, 20000);
+      monthlyLimit = protectionLimit(env.MONTHLY_EVENT_LIMIT, 0);
       if (
         (rateLimit || monthlyLimit) &&
         typeof env.INGESTION_GUARD?.getByName !== "function"
